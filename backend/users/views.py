@@ -1,24 +1,42 @@
+from requests import request
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from .models import User
 from .serializers import RegisterSerializer, LoginSerializer
 from rest_framework_simplejwt.tokens import RefreshToken
-from rest_framework.permissions import IsAuthenticated
-
+from rest_framework.permissions import AllowAny, IsAuthenticated
+from mongoengine.errors import NotUniqueError
 
 class RegisterView(APIView):
+    permission_classes = [AllowAny]
     def post(self, request):
         serializer = RegisterSerializer(data=request.data)
-
         if serializer.is_valid():
-            serializer.save()
-            return Response({"message": "User registered"}, status=201)
+            try:
+                user = serializer.save()
+                refresh = RefreshToken.for_user(user)
+                return Response({
+                    "message": "User registered",
+                    "access": str(refresh.access_token),
+                    "refresh": str(refresh),
+                    "user": {
+                        "id": str(user.id),
+                        "name": user.name,
+                        "email": user.email,
+                    },
+                }, status=201)
+            except NotUniqueError:
+                return Response(
+                    {"error": "Email already exists"},
+                    status=400
+                )
 
         return Response(serializer.errors, status=400)
 
 
 class LoginView(APIView):
+    permission_classes = [AllowAny]
     def post(self, request):
         serializer = LoginSerializer(data=request.data)
 
@@ -34,13 +52,16 @@ class LoginView(APIView):
             if not user.check_password(password):
                 return Response({"error": "Invalid password"}, status=400)
 
-            refresh = RefreshToken()
-            refresh['user_id'] = str(user.id)
-            refresh['email'] = user.email
+            refresh = RefreshToken.for_user(user)
 
             return Response({
                 "access": str(refresh.access_token),
-                "refresh": str(refresh)
+                "refresh": str(refresh),
+                "user": {
+                    "id": str(user.id),
+                    "name": user.name,
+                    "email": user.email,
+                },
             })
 
         return Response(serializer.errors, status=400)
@@ -49,7 +70,11 @@ class TestProtectedView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
+        user = request.user
+
         return Response({
             "message": "Authenticated",
-            "user": request.user.email
+            "user": str(user.email) if user else "No user"
         })
+        print("USER:", request.user)
+        print("TYPE:", type(request.user))

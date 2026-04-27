@@ -5,7 +5,7 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Legend,
   BarChart, Bar,
 } from 'recharts';
-import { getDashboardData } from '../services/mockApi.js';
+import { getDashboardData, getAppliances } from '../services/api.js';
 import { StatCard, Card, LoadingScreen, ProgressBar } from '../components/ui/index.jsx';
 import {
   calcTotalDailyKwh, calcTotalMonthlyBill,
@@ -34,11 +34,10 @@ export default function Dashboard() {
   useEffect(() => {
     async function load() {
       try {
-        const [dash, { getAppliances }] = await Promise.all([
+        const [dash, { appliances: apps }] = await Promise.all([
           getDashboardData(),
-          import('../services/mockApi.js'),
+          getAppliances(),
         ]);
-        const { appliances: apps } = await getAppliances();
         setData(dash);
         setApps(apps);
       } finally {
@@ -113,7 +112,7 @@ export default function Dashboard() {
               {appliances.map((a, i) => {
                 const pct = getUsagePercentage(a, appliances);
                 return (
-                  <div key={a._id}>
+                  <div key={a.id}>
                     <div className="flex items-center gap-2 mb-1">
                       <div className="w-2 h-2 rounded-sm shrink-0" style={{ background: CHART_COLORS[i % CHART_COLORS.length] }} />
                       <span className="text-xs text-[var(--text2)] flex-1 truncate">{a.name.split(' ')[0]}</span>

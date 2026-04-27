@@ -1,6 +1,6 @@
 // pages/Insights.jsx
 import React, { useEffect, useState } from 'react';
-import { getInsights } from '../services/mockApi.js';
+import { getInsights, getAppliances } from '../services/api.js';
 import { StatCard, LoadingScreen, EmptyState, Badge } from '../components/ui/index.jsx';
 import { formatCurrency } from '../utils/electricity.js';
 import { useToast } from '../context/ToastContext.jsx';
@@ -69,7 +69,7 @@ export default function Insights() {
             const style = TYPE_STYLES[insight.type] || TYPE_STYLES.tip;
             return (
               <div
-                key={insight._id}
+                key={insight.id}
                 className="flex gap-4 items-start rounded-xl p-4 border transition-all duration-200 hover:scale-[1.005]"
                 style={{ background: style.bg, borderColor: style.border }}
               >

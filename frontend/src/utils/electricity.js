@@ -20,8 +20,10 @@ export function calcTotalDailyKwh(appliances) {
   );
 }
 
-export function calcTotalMonthlyBill(appliances, rate = RATE_PER_KWH) {
-  return Math.round(calcTotalDailyKwh(appliances) * 30 * rate);
+export function calculateBill(units) {
+  if (units <= 100) return units * 9;
+  if (units <= 200) return (100 * 9) + ((units - 100) * 12);
+  return (100 * 9) + (100 * 12) + ((units - 200) * 15);
 }
 
 export function formatCurrency(amount) {

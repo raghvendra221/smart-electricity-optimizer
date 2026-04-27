@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useToast } from '../context/ToastContext.jsx';
-import { registerUser } from '../services/mockApi.js';
+import { registerUser } from '../services/api.js';
 import { Input, Button } from '../components/ui/index.jsx';
 
 export default function Signup() {
@@ -35,8 +35,8 @@ export default function Signup() {
     setErrors({});
     setLoading(true);
     try {
-      const { token, user } = await registerUser(form.name, form.email, form.password);
-      login(token, user);
+      const { access, user } = await registerUser(form.name, form.email, form.password);
+      login(access, user);
       addToast(`Account created! Welcome, ${user.name}!`, 'success');
       navigate('/dashboard');
     } catch (err) {

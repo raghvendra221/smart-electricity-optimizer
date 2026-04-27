@@ -21,7 +21,10 @@ class CustomJWTAuthentication(BaseAuthentication):
                 algorithms=['HS256']
             )
 
-            user = User.objects(id=payload['user_id']).first()
+            try:
+                user = User.objects(id=payload['user_id']).first()
+            except:
+                raise AuthenticationFailed("User lookup failed - invalid ID format")
 
             if not user:
                 raise AuthenticationFailed("User not found")
@@ -30,6 +33,7 @@ class CustomJWTAuthentication(BaseAuthentication):
 
         except jwt.ExpiredSignatureError:
             raise AuthenticationFailed("Token expired")
-
-        except Exception:
+        except jwt.InvalidTokenError:
             raise AuthenticationFailed("Invalid token")
+        except Exception as e:
+            raise AuthenticationFailed(f"Authentication error: {str(e)}")

@@ -3,13 +3,13 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useToast } from '../context/ToastContext.jsx';
-import { loginUser } from '../services/mockApi.js';
+import { loginUser } from '../services/api.js'; // ✅ FIXED
 import { Input, Button } from '../components/ui/index.jsx';
 
 export default function Login() {
-  const [email, setEmail]     = useState('');
-  const [password, setPass]   = useState('');
-  const [errors, setErrors]   = useState({});
+  const [email, setEmail] = useState('');
+  const [password, setPass] = useState('');
+  const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
 
   const { login } = useAuth();
@@ -29,13 +29,19 @@ export default function Login() {
     ev.preventDefault();
     const e = validate();
     if (Object.keys(e).length) { setErrors(e); return; }
+
     setErrors({});
     setLoading(true);
+
     try {
-      const { token, user } = await loginUser(email, password);
-      login(token, user);
-      addToast(`Welcome back, ${user.name}!`, 'success');
+      const res = await loginUser(email, password);
+
+      // ✅ FIXED (use backend response)
+      login(res.access, { email });
+
+      addToast(`Welcome back!`, 'success');
       navigate('/dashboard');
+
     } catch (err) {
       addToast(err.message || 'Login failed', 'error');
     } finally {
@@ -46,7 +52,7 @@ export default function Login() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-[var(--bg)] p-5">
       <div className="w-full max-w-sm">
-        {/* Logo */}
+
         <div className="text-center mb-8">
           <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[var(--accent)] to-[var(--accent2)]
             flex items-center justify-center text-3xl mx-auto mb-3">
@@ -56,42 +62,29 @@ export default function Login() {
           <p className="font-mono text-[11px] text-[var(--text3)] mt-1">Usage Optimizer v2.0</p>
         </div>
 
-        {/* Card */}
         <div className="bg-[var(--card)] border border-[var(--border)] rounded-2xl p-7">
-          <h2 className="text-base font-semibold text-[var(--text)] mb-5">Sign in to your account</h2>
+          <h2 className="text-base font-semibold text-[var(--text)] mb-5">
+            Sign in to your account
+          </h2>
+
           <form onSubmit={handleSubmit} className="space-y-4">
-            <Input
-              label="Email"
-              type="email"
-              placeholder="you@example.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              error={errors.email}
-            />
-            <Input
-              label="Password"
-              type="password"
-              placeholder="••••••••"
-              value={password}
-              onChange={(e) => setPass(e.target.value)}
-              error={errors.password}
-            />
-            <Button
-              type="submit"
-              loading={loading}
-              disabled={loading}
-              className="w-full justify-center py-3 mt-2"
-            >
+            <Input label="Email" type="email" value={email}
+              onChange={(e) => setEmail(e.target.value)} error={errors.email} />
+
+            <Input label="Password" type="password" value={password}
+              onChange={(e) => setPass(e.target.value)} error={errors.password} />
+
+            <Button type="submit" loading={loading} disabled={loading}
+              className="w-full justify-center py-3 mt-2">
               Sign In
             </Button>
           </form>
 
           <p className="text-center text-sm text-[var(--text3)] mt-5">
             Don't have an account?{' '}
-            <Link to="/signup" className="text-[var(--accent)] hover:underline">Sign up</Link>
-          </p>
-          <p className="text-center font-mono text-[10px] text-[var(--text3)] mt-3">
-            Demo: any email + 6+ char password
+            <Link to="/signup" className="text-[var(--accent)] hover:underline">
+              Sign up
+            </Link>
           </p>
         </div>
       </div>

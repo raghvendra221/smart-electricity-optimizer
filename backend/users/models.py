@@ -17,3 +17,8 @@ class User(Document):
 
     def check_password(self, password):
         return bcrypt.checkpw(password.encode(), self.password.encode())
+    
+    @property
+    def is_authenticated(self):
+        return True
+    
