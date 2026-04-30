@@ -7,6 +7,7 @@ from .serializers import RegisterSerializer, LoginSerializer
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from mongoengine.errors import NotUniqueError
+from rest_framework_simplejwt.exceptions import TokenError
 
 class RegisterView(APIView):
     permission_classes = [AllowAny]
@@ -65,6 +66,21 @@ class LoginView(APIView):
             })
 
         return Response(serializer.errors, status=400)
+
+class RefreshView(APIView):
+    permission_classes = [AllowAny]
+    def post(self, request):
+        refresh_token = request.data.get("refresh")
+        if not refresh_token:
+            return Response({"error": "Refresh token is required"}, status=400)
+            
+        try:
+            refresh = RefreshToken(refresh_token)
+            return Response({
+                "access": str(refresh.access_token),
+            }, status=200)
+        except TokenError:
+            return Response({"error": "Invalid or expired refresh token"}, status=401)
 
 class TestProtectedView(APIView):
     permission_classes = [IsAuthenticated]

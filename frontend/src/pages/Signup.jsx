@@ -35,8 +35,8 @@ export default function Signup() {
     setErrors({});
     setLoading(true);
     try {
-      const { access, user } = await registerUser(form.name, form.email, form.password);
-      login(access, user);
+      const { access, refresh, user } = await registerUser(form.name, form.email, form.password);
+      login(access, refresh, user);
       addToast(`Account created! Welcome, ${user.name}!`, 'success');
       navigate('/dashboard');
     } catch (err) {

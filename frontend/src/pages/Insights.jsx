@@ -17,7 +17,7 @@ export default function Insights() {
   const [data, setData] = useState({
     insights: [],
     total_units: 0,
-    total_cost: 0,
+    estimated_bill: 0,
     top_appliance: null,
     appliances: {}
   });
@@ -31,7 +31,7 @@ export default function Insights() {
         setData({
           insights: response.insights || [],
           total_units: response.total_units || 0,
-          total_cost: response.total_cost || 0,
+          estimated_bill: response.estimated_bill || 0,
           top_appliance: response.top_appliance || null,
           appliances: response.appliances || {}
         });
@@ -47,7 +47,7 @@ export default function Insights() {
 
   if (loading) return <LoadingScreen message="Analyzing your usage..." />;
 
-  const { insights, total_units, total_cost, top_appliance } = data;
+  const { insights, total_units, estimated_bill, top_appliance } = data;
   const totalSavings = insights.reduce((s, i) => s + (i.potentialSaving || 0), 0);
   const actionCount = insights.filter((i) => i.type !== 'good').length;
 
@@ -83,9 +83,9 @@ export default function Insights() {
           accentColor="var(--accent)"
         />
         <StatCard
-          label="Total Cost"
-          value={formatCurrency(total_cost)}
-          sub="Estimated billing"
+          label="Estimated Bill"
+          value={formatCurrency(estimated_bill)}
+          sub="Slab-based billing"
           accentColor="var(--accent2)"
         />
         <StatCard

@@ -17,10 +17,13 @@ export function AuthProvider({ children }) {
     setLoading(false);
   }, []);
 
-  const login = useCallback((tokenValue, userData) => {
+  const login = useCallback((tokenValue, refreshTokenValue, userData) => {
     setToken(tokenValue);
     setUser(userData);
     localStorage.setItem('seuo_token', tokenValue);
+    if (refreshTokenValue) {
+      localStorage.setItem('seuo_refresh', refreshTokenValue);
+    }
     localStorage.setItem('seuo_user', JSON.stringify(userData));
   }, []);
 
@@ -28,6 +31,7 @@ export function AuthProvider({ children }) {
     setToken(null);
     setUser(null);
     localStorage.removeItem('seuo_token');
+    localStorage.removeItem('seuo_refresh');
     localStorage.removeItem('seuo_user');
   }, []);
 

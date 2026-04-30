@@ -107,29 +107,36 @@ class ApplianceStatsView(APIView):
             usage_map[aid]["hours"] += u.hours_used
             usage_map[aid]["units"] += u.units_consumed
 
-        # Compute total units across all appliances for proportional cost
+        # Compute total bill once from total units (slab-based)
         total_units = sum(v["units"] for v in usage_map.values())
         total_bill = calculate_bill(total_units)
 
+        # Build result with proportional cost + remainder adjustment
         result = []
+        remaining_bill = total_bill
 
-        for a in appliances:
+        appliance_list = list(appliances)
+        for i, a in enumerate(appliance_list):
             aid = str(a.id)
             hours = usage_map[aid]["hours"]
             units = usage_map[aid]["units"]
 
-            # Proportional cost: slab applies to total, then distribute by share
-            cost = round((units / total_units) * total_bill, 2) if total_units > 0 else 0
+            # Last appliance absorbs rounding remainder
+            if i == len(appliance_list) - 1 and total_units > 0:
+                cost = round(remaining_bill, 2)
+            elif total_units > 0:
+                cost = round((units / total_units) * total_bill, 2)
+                remaining_bill -= cost
+            else:
+                cost = 0
 
             result.append({
                 "id": aid,
                 "name": a.name,
                 "wattage": a.wattage,
-
                 "hours_used": round(hours, 2),
                 "units": round(units, 2),
                 "cost": cost,
-
                 "status": "active" if hours > 0 else "standby",
                 "current_draw_kw": round(a.wattage / 1000, 2)
             })

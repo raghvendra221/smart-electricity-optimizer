@@ -5,6 +5,8 @@ const BASE_URL = 'http://127.0.0.1:8000/api';
 
 const getToken = () => localStorage.getItem('seuo_token');
 
+let refreshPromise = null;
+
 async function request(path, options = {}) {
   const token = getToken();
   const headers = {
@@ -13,10 +15,50 @@ async function request(path, options = {}) {
     ...(options.headers || {}),
   };
 
-  const response = await fetch(`${BASE_URL}${path}`, {
+  let response = await fetch(`${BASE_URL}${path}`, {
     ...options,
     headers,
   });
+
+  // Intercept 401/403 for Token Refresh
+  if ((response.status === 401 || response.status === 403) && !path.includes('/auth/')) {
+    const refresh = localStorage.getItem('seuo_refresh');
+    if (refresh) {
+      try {
+        if (!refreshPromise) {
+          refreshPromise = fetch(`${BASE_URL}/auth/refresh/`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ refresh })
+          }).then(res => {
+            if (!res.ok) throw new Error("Refresh failed");
+            return res.json();
+          }).then(data => {
+            localStorage.setItem('seuo_token', data.access);
+            return data.access;
+          }).finally(() => {
+            refreshPromise = null;
+          });
+        }
+        
+        const newAccess = await refreshPromise;
+        headers.Authorization = `Bearer ${newAccess}`;
+        
+        // Retry original request
+        response = await fetch(`${BASE_URL}${path}`, {
+          ...options,
+          headers,
+        });
+      } catch (err) {
+        // Refresh failed (token totally expired)
+        localStorage.removeItem('seuo_token');
+        localStorage.removeItem('seuo_refresh');
+        localStorage.removeItem('seuo_user');
+        window.location.href = '/login';
+        throw new Error('Session expired. Please log in again.');
+      }
+    }
+  }
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({ message: 'Request failed' }));

@@ -16,7 +16,7 @@ class GeminiInsightsView(APIView):
         if not usages:
             return Response({
                 "total_units": 0,
-                "total_cost": 0,
+                "estimated_bill": 0,
                 "top_appliance": None,
                 "insights": []
             })
@@ -32,11 +32,20 @@ class GeminiInsightsView(APIView):
             units = u.units_consumed
             appliance_data[name] = appliance_data.get(name, 0) + units
 
-        # Proportional cost: slab applies to total, then distribute by share
-        appliance_cost = {
-            name: round((units / total_units) * total_cost, 2) if total_units > 0 else 0
-            for name, units in appliance_data.items()
-        }
+        # Proportional cost with remainder adjustment (last appliance absorbs rounding)
+        appliance_cost = {}
+        remaining = total_cost
+        appliance_names = list(appliance_data.keys())
+        for i, name in enumerate(appliance_names):
+            units = appliance_data[name]
+            if i == len(appliance_names) - 1 and total_units > 0:
+                appliance_cost[name] = round(remaining, 2)
+            elif total_units > 0:
+                cost = round((units / total_units) * total_cost, 2)
+                appliance_cost[name] = cost
+                remaining -= cost
+            else:
+                appliance_cost[name] = 0
 
         # Find top appliance
         top_appliance = max(appliance_data.items(), key=lambda x: x[1])[0] if appliance_data else None
@@ -45,7 +54,7 @@ class GeminiInsightsView(APIView):
         # Prepare data for AI analysis
         data = {
             "total_units": round(total_units, 2),
-            "total_cost": round(total_cost, 2),
+            "estimated_bill": round(total_cost, 2),
             "top_appliance": top_appliance,
             "appliances": appliance_data
         }
@@ -58,7 +67,7 @@ class GeminiInsightsView(APIView):
 
         return Response({
             "total_units": round(total_units, 2),
-            "total_cost": round(total_cost, 2),
+            "estimated_bill": round(total_cost, 2),
             "top_appliance": top_appliance,
             "top_appliance_cost": round(top_appliance_cost, 2),
             "appliances": appliance_data,

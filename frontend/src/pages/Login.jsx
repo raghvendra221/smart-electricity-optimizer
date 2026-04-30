@@ -37,7 +37,7 @@ export default function Login() {
       const res = await loginUser(email, password);
 
       // ✅ FIXED (use backend response)
-      login(res.access, { email });
+      login(res.access, res.refresh, { email });
 
       addToast(`Welcome back!`, 'success');
       navigate('/dashboard');
