@@ -20,6 +20,12 @@ export function calcTotalDailyKwh(appliances) {
   );
 }
 
+export function calcTotalMonthlyBill(appliances) {
+  const dailyKwh = calcTotalDailyKwh(appliances);
+  const monthlyKwh = dailyKwh * 30;
+  return calculateBill(monthlyKwh);
+}
+
 export function calculateBill(units) {
   if (units <= 100) return units * 9;
   if (units <= 200) return (100 * 9) + ((units - 100) * 12);

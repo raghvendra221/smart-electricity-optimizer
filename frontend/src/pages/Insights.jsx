@@ -1,6 +1,6 @@
 // pages/Insights.jsx
 import React, { useEffect, useState } from 'react';
-import { getInsights, getAppliances } from '../services/api.js';
+import { getInsights } from '../services/api.js';
 import { StatCard, LoadingScreen, EmptyState, Badge } from '../components/ui/index.jsx';
 import { formatCurrency } from '../utils/electricity.js';
 import { useToast } from '../context/ToastContext.jsx';
@@ -14,28 +14,42 @@ const TYPE_STYLES = {
 };
 
 export default function Insights() {
-  const [insights, setInsights] = useState([]);
-  const [loading, setLoading]   = useState(true);
+  const [data, setData] = useState({
+    insights: [],
+    total_units: 0,
+    total_cost: 0,
+    top_appliance: null,
+    appliances: {}
+  });
+  const [loading, setLoading] = useState(true);
   const { addToast } = useToast();
 
   useEffect(() => {
     async function load() {
       try {
-        const { insights: data } = await getInsights();
-        setInsights(data);
-      } catch {
+        const response = await getInsights();
+        setData({
+          insights: response.insights || [],
+          total_units: response.total_units || 0,
+          total_cost: response.total_cost || 0,
+          top_appliance: response.top_appliance || null,
+          appliances: response.appliances || {}
+        });
+      } catch (error) {
+        console.error('Error loading insights:', error);
         addToast('Failed to load insights', 'error');
       } finally {
         setLoading(false);
       }
     }
     load();
-  }, []);
+  }, [addToast]);
 
   if (loading) return <LoadingScreen message="Analyzing your usage..." />;
 
-  const totalSavings  = insights.reduce((s, i) => s + (i.potentialSaving || 0), 0);
-  const actionCount   = insights.filter((i) => i.type !== 'good').length;
+  const { insights, total_units, total_cost, top_appliance } = data;
+  const totalSavings = insights.reduce((s, i) => s + (i.potentialSaving || 0), 0);
+  const actionCount = insights.filter((i) => i.type !== 'good').length;
 
   return (
     <div>
@@ -60,9 +74,31 @@ export default function Insights() {
         />
       </div>
 
+      {/* Usage Summary - All calculations from backend */}
+      <div className="grid grid-cols-3 gap-3 mb-5">
+        <StatCard
+          label="Total Units Consumed"
+          value={total_units.toFixed(2)}
+          sub="kWh this month"
+          accentColor="var(--accent)"
+        />
+        <StatCard
+          label="Total Cost"
+          value={formatCurrency(total_cost)}
+          sub="Estimated billing"
+          accentColor="var(--accent2)"
+        />
+        <StatCard
+          label="Top Appliance"
+          value={top_appliance || 'N/A'}
+          sub="Highest consumption"
+          accentColor="var(--warning)"
+        />
+      </div>
+
       {/* Insight Cards */}
       {insights.length === 0 ? (
-        <EmptyState icon="💡" title="No insights yet" subtitle="Add appliances to get personalized recommendations." />
+        <EmptyState icon="💡" title="No insights yet" subtitle="Add appliances and log usage to get personalized recommendations." />
       ) : (
         <div className="space-y-3">
           {insights.map((insight) => {

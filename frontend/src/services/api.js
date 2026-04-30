@@ -44,8 +44,8 @@ export async function registerUser(name, email, password) {
 
 // ── Dashboard ─────────────────────────────────────────────────────────────────
 
-export async function getDashboardData() {
-  return request('/appliances/dashboard/');
+export async function getDashboard() {
+  return request('/dashboard/dashboard/');
 }
 
 
@@ -75,6 +75,10 @@ export async function deleteAppliance(id) {
   });
 }
 
+export async function getApplianceStats() {
+  return request('/appliances/stats/');
+}
+
 // ── Usage ─────────────────────────────────────────────────────────────────────
 
 export async function getUsageSummary() {
@@ -95,8 +99,24 @@ export async function logUsage({ applianceId, hours }) {
   });
 }
 
+export async function getUsageHistory(range = '7d') {
+  return request(`/usage/history/?range=${range}`);
+}
+
+export async function getUsageLogs() {
+  return request('/usage/logs/');
+}
+
 // ── Insights ──────────────────────────────────────────────────────────────────
 
 export async function getInsights() {
-  return request('/appliances/insights/');
+  return request('/insight/ai-insights/');
+}
+
+export async function getPrediction() {
+  return request('/usage/predict/');
+}
+
+export async function getAIInsights() {
+  return request('/insight/ai-insights/');
 }

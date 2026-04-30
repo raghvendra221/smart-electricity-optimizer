@@ -5,6 +5,9 @@ from rest_framework import status
 from .models import Appliance
 from .serializers import ApplianceSerializer
 from bson import ObjectId
+from usage.models import Usage
+from datetime import datetime
+from collections import defaultdict
 
 class AddApplianceView(APIView):
     permission_classes = [IsAuthenticated]
@@ -81,38 +84,51 @@ class DeleteApplianceView(APIView):
         appliance.delete()
         return Response({"message": "Deleted"}, status=200)
 
-class DashboardView(APIView):
+
+
+class ApplianceStatsView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        try:
-            # For now, return some dummy data so the frontend doesn't crash
-            return Response({
-                "totalUnits": 0,
-                "estimatedBill": 0,
-                "monthlyTrend": [0, 0, 0, 0, 0, 0],
-                "dailyUsage": [0, 0, 0, 0, 0, 0, 0],
-                "months": ['Nov', 'Dec', 'Jan', 'Feb', 'Mar', 'Apr'],
-                "days": ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
-            }, status=200)
-        except Exception as e:
-            return Response({"error": str(e)}, status=500)
+        appliances = Appliance.objects(user=request.user)
 
-class InsightsView(APIView):
-    permission_classes = [IsAuthenticated]
+        today = datetime.utcnow().date()
 
-    def get(self, request):
-        try:
-            insights = [
-                {
-                    "id": "2",
-                    "type": "tip",
-                    "icon": "💡",
-                    "title": "LED upgrade recommended",
-                    "description": "Switching to LED bulbs reduces lighting costs by up to 75%.",
-                    "potentialSaving": 150
-                }
-            ]
-            return Response({"insights": insights}, status=200)
-        except Exception as e:
-            return Response({"error": str(e)}, status=500)
+        usage_data = Usage.objects(
+            user=request.user,
+            date__gte=today
+        )
+
+        usage_map = defaultdict(lambda: {"hours": 0, "units": 0})
+
+        for u in usage_data:
+            aid = str(u.appliance.id)
+            usage_map[aid]["hours"] += u.hours_used
+            usage_map[aid]["units"] += u.units_consumed
+
+        result = []
+
+        for a in appliances:
+            aid = str(a.id)
+            hours = usage_map[aid]["hours"]
+            units = usage_map[aid]["units"]
+
+            cost = units * 9  # ₹9 per unit
+
+            result.append({
+                "id": aid,
+                "name": a.name,
+                "wattage": a.wattage,
+
+                # 🔥 NEW DATA FOR UI
+                "hours_used": round(hours, 2),
+                "units": round(units, 2),
+                "cost": round(cost, 2),
+
+                # 🔥 Derived fields
+                "status": "active" if hours > 0 else "standby",
+                "current_draw_kw": round(a.wattage / 1000, 2)
+            })
+
+        return Response({"appliances": result})
+

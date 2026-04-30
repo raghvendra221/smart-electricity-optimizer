@@ -4,15 +4,15 @@ from .views import (
     ListApplianceView,
     UpdateApplianceView,
     DeleteApplianceView,
-    DashboardView,
-    InsightsView
+    ApplianceStatsView,
+
 )
 
 urlpatterns = [
     path('', ListApplianceView.as_view()),
     path('add/', AddApplianceView.as_view()),
-    path('dashboard/', DashboardView.as_view()),
-    path('insights/', InsightsView.as_view()),
+    path('stats/', ApplianceStatsView.as_view()),
+    # path('insights/', InsightsView.as_view()),
     path('<str:id>/', UpdateApplianceView.as_view()),
     path('<str:id>/delete/', DeleteApplianceView.as_view()),
 ]

@@ -47,6 +47,9 @@ INSTALLED_APPS = [
     'corsheaders',
     'appliances',
     'usage',
+    'dashboard',
+    'insight',
+    
 ]
 
 MIDDLEWARE = [
