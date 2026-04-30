@@ -3,6 +3,7 @@ from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from usage.models import Usage
+from usage.utils import calculate_bill
 from .gemini_ai import generate_ai_insights
 import re
 
@@ -22,19 +23,20 @@ class GeminiInsightsView(APIView):
 
         # Calculate total consumption
         total_units = sum(u.units_consumed for u in usages)
-        total_cost = sum(u.units_consumed * 9 for u in usages)  # ₹9 per unit (adjust as needed)
+        total_cost = calculate_bill(total_units)
 
-        # Calculate appliance breakdown
+        # Calculate appliance breakdown (units)
         appliance_data = {}
-        appliance_cost = {}
         for u in usages:
             name = u.appliance.name
-            cost_unit = 9  # ₹9 per unit
             units = u.units_consumed
-            cost = units * cost_unit
-            
             appliance_data[name] = appliance_data.get(name, 0) + units
-            appliance_cost[name] = appliance_cost.get(name, 0) + cost
+
+        # Proportional cost: slab applies to total, then distribute by share
+        appliance_cost = {
+            name: round((units / total_units) * total_cost, 2) if total_units > 0 else 0
+            for name, units in appliance_data.items()
+        }
 
         # Find top appliance
         top_appliance = max(appliance_data.items(), key=lambda x: x[1])[0] if appliance_data else None

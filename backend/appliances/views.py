@@ -6,6 +6,7 @@ from .models import Appliance
 from .serializers import ApplianceSerializer
 from bson import ObjectId
 from usage.models import Usage
+from usage.utils import calculate_bill
 from datetime import datetime
 from collections import defaultdict
 
@@ -106,6 +107,10 @@ class ApplianceStatsView(APIView):
             usage_map[aid]["hours"] += u.hours_used
             usage_map[aid]["units"] += u.units_consumed
 
+        # Compute total units across all appliances for proportional cost
+        total_units = sum(v["units"] for v in usage_map.values())
+        total_bill = calculate_bill(total_units)
+
         result = []
 
         for a in appliances:
@@ -113,19 +118,18 @@ class ApplianceStatsView(APIView):
             hours = usage_map[aid]["hours"]
             units = usage_map[aid]["units"]
 
-            cost = units * 9  # ₹9 per unit
+            # Proportional cost: slab applies to total, then distribute by share
+            cost = round((units / total_units) * total_bill, 2) if total_units > 0 else 0
 
             result.append({
                 "id": aid,
                 "name": a.name,
                 "wattage": a.wattage,
 
-                # 🔥 NEW DATA FOR UI
                 "hours_used": round(hours, 2),
                 "units": round(units, 2),
-                "cost": round(cost, 2),
+                "cost": cost,
 
-                # 🔥 Derived fields
                 "status": "active" if hours > 0 else "standby",
                 "current_draw_kw": round(a.wattage / 1000, 2)
             })
