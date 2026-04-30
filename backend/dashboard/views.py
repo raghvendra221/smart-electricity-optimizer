@@ -1,4 +1,5 @@
-from datetime import datetime, timedelta
+from datetime import timedelta
+from django.utils import timezone
 from collections import defaultdict
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
@@ -11,7 +12,7 @@ class DashboardView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        now = datetime.utcnow()
+        now = timezone.now()
         today = now.date()
         last_7_days = now - timedelta(days=7)
         last_30_days = now - timedelta(days=30)
@@ -32,24 +33,34 @@ class DashboardView(APIView):
 
         weekly_units = sum(u.units_consumed for u in weekly_usage)
 
-        # FIX: safe avg
-        avg_daily = weekly_units / 7 if weekly_units > 0 else 0
+        # FIX: safe avg using active days
+        active_dates = {u.date.date() for u in weekly_usage}
+        active_days = len(active_dates)
+        if active_days < 4:
+            avg_daily = weekly_units / 7
+        else:
+            avg_daily = weekly_units / active_days
         predicted_units = avg_daily * 30
         predicted_bill = calculate_bill(predicted_units)
 
         # ───── MONTHLY CHANGE (NEW) ─────
-        last_month_usage = Usage.objects(
+        previous_60_days = now - timedelta(days=60)
+        previous_month_usage = Usage.objects(
+            user=request.user,
+            date__gte=previous_60_days,
+            date__lt=last_30_days
+        )
+        previous_month_units = sum(u.units_consumed for u in previous_month_usage)
+
+        current_month_usage = Usage.objects(
             user=request.user,
             date__gte=last_30_days
         )
-
-        last_month_units = sum(u.units_consumed for u in last_month_usage)
-
-        current_projection = daily_units * 30
+        current_month_units = sum(u.units_consumed for u in current_month_usage)
 
         monthly_change = 0
-        if last_month_units > 0:
-            monthly_change = ((current_projection - last_month_units) / last_month_units) * 100
+        if previous_month_units > 0:
+            monthly_change = ((current_month_units - previous_month_units) / previous_month_units) * 100
 
         # ───── APPLIANCE DISTRIBUTION ─────
         appliance_usage = defaultdict(float)
@@ -68,8 +79,15 @@ class DashboardView(APIView):
         # ───── WEEKLY TREND FIX ─────
         week_data = defaultdict(float)
 
+        import datetime
+        from django.utils.timezone import make_aware, is_naive
+
         for u in weekly_usage:
-            day = u.date.strftime('%a')
+            dt = u.date
+            if is_naive(dt):
+                dt = make_aware(dt, timezone=datetime.timezone.utc)
+            local_date = timezone.localtime(dt)
+            day = local_date.strftime('%a')
             week_data[day] += u.units_consumed
 
         # FIX: ensure all days exist

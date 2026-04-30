@@ -1,4 +1,5 @@
-from datetime import datetime
+from datetime import datetime, timedelta
+from django.utils import timezone
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
@@ -7,7 +8,6 @@ from .models import Usage
 from .utils import calculate_bill
 from appliances.models import Appliance
 from bson import ObjectId
-from datetime import timedelta, datetime
 
 
 
@@ -35,7 +35,7 @@ class AddUsageView(APIView):
 
             # Update if record for today already exists, else create new
             # Use UTC date to find today's start
-            now = datetime.utcnow()
+            now = timezone.now()
             today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
             
             # Find existing usage for this appliance today
@@ -74,7 +74,7 @@ class UsageSummaryView(APIView):
 
     def get(self, request):
         # Filter for today's records
-        today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+        today_start = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
         # Order by date ASC so that when building the dict, later records overwrite earlier ones
         usages = Usage.objects(user=request.user, date__gte=today_start).order_by('date')
         
@@ -99,7 +99,7 @@ class ApplianceUsageView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+        today_start = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
         usages = Usage.objects(user=request.user, date__gte=today_start)
         data = {}
         for u in usages:
@@ -115,7 +115,7 @@ class BillPredictionView(APIView):
 
     def get(self, request):
         # Last 7 days data
-        last_7_days = datetime.utcnow() - timedelta(days=7)
+        last_7_days = timezone.now() - timedelta(days=7)
 
         usages = Usage.objects(
             user=request.user,
@@ -130,7 +130,13 @@ class BillPredictionView(APIView):
             })
 
         total_units = sum(u.units_consumed for u in usages)
-        avg_daily = total_units / 7
+        active_dates = {u.date.date() for u in usages}
+        active_days = len(active_dates)
+        
+        if active_days < 4:
+            avg_daily = total_units / 7
+        else:
+            avg_daily = total_units / active_days
 
         predicted_units = avg_daily * 30
         predicted_bill = calculate_bill(predicted_units)
@@ -154,7 +160,7 @@ class UsageHistoryView(APIView):
         else:
             days = 365
 
-        start_date = datetime.utcnow() - timedelta(days=days)
+        start_date = timezone.now() - timedelta(days=days)
 
         usages = Usage.objects(
             user=request.user,

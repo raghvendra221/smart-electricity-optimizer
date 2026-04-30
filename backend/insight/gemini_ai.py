@@ -28,9 +28,21 @@ def generate_ai_insights(data):
         - Max 3 points
         """
 
-        # List of models to try in order of preference
-        models_to_try = ["gemini-2.0-flash", "gemini-2.5-flash", "gemini-1.5-flash"]
-        
+        # Dynamically fetch available models
+        try:
+            available_models = []
+            for m in client.models.list():
+                if "generateContent" in m.supported_generation_methods:
+                    available_models.append(m.name.replace("models/", ""))
+            
+            # Prioritize flash or pro models if available
+            preferred = ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-pro", "gemini-1.5-flash-latest"]
+            models_to_try = [m for m in preferred if m in available_models] + available_models
+            if not models_to_try:
+                models_to_try = ["gemini-1.5-flash", "gemini-1.5-pro"]
+        except Exception:
+            models_to_try = ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-pro"]
+            
         response = None
         last_error = None
         

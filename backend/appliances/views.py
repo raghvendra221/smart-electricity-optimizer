@@ -7,7 +7,7 @@ from .serializers import ApplianceSerializer
 from bson import ObjectId
 from usage.models import Usage
 from usage.utils import calculate_bill
-from datetime import datetime
+from django.utils import timezone
 from collections import defaultdict
 
 class AddApplianceView(APIView):
@@ -93,7 +93,7 @@ class ApplianceStatsView(APIView):
     def get(self, request):
         appliances = Appliance.objects(user=request.user)
 
-        today = datetime.utcnow().date()
+        today = timezone.now().date()
 
         usage_data = Usage.objects(
             user=request.user,

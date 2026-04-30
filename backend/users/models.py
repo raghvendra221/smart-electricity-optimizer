@@ -1,5 +1,5 @@
 from mongoengine import Document, StringField, EmailField, DateTimeField
-from datetime import datetime
+from django.utils import timezone
 import bcrypt
 
 
@@ -7,7 +7,7 @@ class User(Document):
     name = StringField(required=True)
     email = EmailField(required=True, unique=True)
     password = StringField(required=True)
-    created_at = DateTimeField(default=datetime.utcnow)
+    created_at = DateTimeField(default=timezone.now)
 
     meta = {'collection': 'users'}
 

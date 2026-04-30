@@ -4,7 +4,7 @@ import {
   PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
   AreaChart, Area, XAxis, YAxis, CartesianGrid,
 } from 'recharts';
-import { getDashboard, getAIInsights } from '../services/api.js';
+import { getDashboard, getAIInsights, getPrediction } from '../services/api.js';
 import { Card, LoadingScreen, Badge } from '../components/ui/index.jsx';
 import { formatCurrency, CHART_COLORS } from '../utils/electricity.js';
 
@@ -43,16 +43,19 @@ export default function Dashboard() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [insights, setInsights] = useState([]);
+  const [prediction, setPrediction] = useState(null);
 
   useEffect(() => {
     async function load() {
       try {
-        const [dash, ai] = await Promise.all([
+        const [dash, ai, pred] = await Promise.all([
           getDashboard(),
           getAIInsights().catch(() => ({ insights: [] })),
+          getPrediction().catch(() => ({ predicted_bill: 0 })),
         ]);
         setData(dash);
         setInsights(Array.isArray(ai.insights) ? ai.insights : []);
+        setPrediction(pred);
       } finally {
         setLoading(false);
       }
@@ -65,6 +68,7 @@ export default function Dashboard() {
   /* ── Data transforms ─────────────────────────────────────────────── */
   const dailyUnits = data?.daily_units ?? 0;
   const estimatedBill = data?.estimated_bill ?? 0;
+  const predictedBill = prediction?.predicted_bill ?? data?.predicted_bill ?? 0;
   const monthlyChange = data?.monthly_change ?? 0;
   const topConsumer = data?.top_consumer || null;
 
@@ -102,22 +106,25 @@ export default function Dashboard() {
         <div className="bg-[var(--card)] border border-[var(--border)] rounded-2xl p-5 flex flex-col justify-between">
           <div className="flex items-center gap-2 mb-3">
             <span className="w-7 h-7 rounded-lg bg-[var(--accent)]/15 flex items-center justify-center text-sm">⚡</span>
-            <span className="text-[10px] font-mono text-[var(--text3)] uppercase tracking-widest">Total Units</span>
+            <span className="text-[10px] font-mono text-[var(--text3)] uppercase tracking-widest">Today's Units</span>
           </div>
           <p className="text-3xl font-bold font-mono text-[var(--text)] leading-none">
             {dailyUnits.toLocaleString('en-IN')} <span className="text-base font-normal text-[var(--text3)]">kWh</span>
           </p>
         </div>
 
-        {/* Estimated Bill */}
+        {/* Predicted Bill */}
         <div className="bg-[var(--card)] border border-[var(--border)] rounded-2xl p-5 flex flex-col justify-between">
           <div className="flex items-center gap-2 mb-3">
             <span className="w-7 h-7 rounded-lg bg-[var(--accent3)]/15 flex items-center justify-center text-sm">💰</span>
-            <span className="text-[10px] font-mono text-[var(--text3)] uppercase tracking-widest">Estimated Bill</span>
+            <span className="text-[10px] font-mono text-[var(--text3)] uppercase tracking-widest">Predicted Bill</span>
           </div>
-          <p className="text-3xl font-bold font-mono text-[var(--text)] leading-none">
-            {formatCurrency(estimatedBill)}
-          </p>
+          <div>
+            <p className="text-3xl font-bold font-mono text-[var(--text)] leading-none">
+              {formatCurrency(predictedBill)}
+            </p>
+            <p className="text-[10px] text-[var(--text3)] mt-1.5 font-mono">Today's Est: {formatCurrency(estimatedBill)}</p>
+          </div>
         </div>
 
         {/* Monthly Change */}
