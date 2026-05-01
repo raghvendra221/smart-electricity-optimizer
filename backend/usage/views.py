@@ -114,12 +114,14 @@ class BillPredictionView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
+        now = timezone.now()
         # Last 7 days data
-        last_7_days = timezone.now() - timedelta(days=7)
+        last_7_days = now - timedelta(days=7)
 
         usages = Usage.objects(
             user=request.user,
-            date__gte=last_7_days
+            date__gte=last_7_days,
+            date__lte=now
         )
 
         if not usages:

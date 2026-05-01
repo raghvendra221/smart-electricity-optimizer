@@ -28,7 +28,8 @@ class DashboardView(APIView):
         # ───── WEEK ─────
         weekly_usage = Usage.objects(
             user=request.user,
-            date__gte=last_7_days
+            date__gte=last_7_days,
+            date__lte=now
         )
 
         weekly_units = sum(u.units_consumed for u in weekly_usage)

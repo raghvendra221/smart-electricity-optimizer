@@ -47,6 +47,7 @@ export default function Usage() {
   // Log form state
   const [selectedAppliance, setSelectedAppliance] = useState('');
   const [duration, setDuration] = useState('');
+  const [durationUnit, setDurationUnit] = useState('mins');
   const [saving, setSaving] = useState(false);
 
   const { addToast } = useToast();
@@ -88,8 +89,9 @@ export default function Usage() {
   /* ── Log Usage Submit ─────────────────────────────────────────── */
   async function handleLogUsage() {
     if (!selectedAppliance) { addToast('Select an appliance', 'error'); return; }
-    const mins = parseFloat(duration);
-    if (!mins || mins <= 0) { addToast('Enter valid duration', 'error'); return; }
+    const rawDuration = parseFloat(duration);
+    if (!rawDuration || rawDuration <= 0) { addToast('Enter valid duration', 'error'); return; }
+    const mins = durationUnit === 'hrs' ? rawDuration * 60 : rawDuration;
 
     setSaving(true);
     try {
@@ -250,34 +252,57 @@ export default function Usage() {
 
             {/* Duration */}
             <div className="flex flex-col gap-1.5">
-              <label className="text-[10px] font-mono text-[var(--text3)] uppercase tracking-widest">Duration (mins)</label>
-              <input
-                type="number"
-                min="0"
-                placeholder="e.g. 60"
-                value={duration}
-                onChange={e => setDuration(e.target.value)}
-                className="w-full bg-[var(--bg3)] border border-[var(--border)] text-[var(--text)] rounded-lg px-3 py-2.5 text-sm
-                  outline-none transition-colors focus:border-[var(--accent)] placeholder:text-[var(--text3)]
-                  font-mono"
-              />
+              <label className="text-[10px] font-mono text-[var(--text3)] uppercase tracking-widest">Duration</label>
+              <div className="flex gap-2">
+                <input
+                  type="number"
+                  min="0"
+                  step="any"
+                  placeholder="e.g. 60"
+                  value={duration}
+                  onChange={e => setDuration(e.target.value)}
+                  className="flex-1 bg-[var(--bg3)] border border-[var(--border)] text-[var(--text)] rounded-lg px-3 py-2.5 text-sm
+                    outline-none transition-colors focus:border-[var(--accent)] placeholder:text-[var(--text3)]
+                    font-mono"
+                />
+                <select
+                  value={durationUnit}
+                  onChange={e => setDurationUnit(e.target.value)}
+                  className="w-24 bg-[var(--bg3)] border border-[var(--border)] text-[var(--text)] rounded-lg px-3 py-2.5 text-sm
+                    outline-none transition-colors focus:border-[var(--accent)] appearance-none"
+                >
+                  <option value="mins">Mins</option>
+                  <option value="hrs">Hrs</option>
+                </select>
+              </div>
             </div>
 
             {/* Quick duration buttons */}
             <div className="flex gap-2">
-              {[15, 30, 60, 120].map(m => (
-                <button
-                  key={m}
-                  onClick={() => setDuration(String(m))}
-                  className={`flex-1 py-1.5 rounded-lg text-[10px] font-mono font-bold border transition-all duration-200 ${
-                    duration === String(m)
-                      ? 'bg-[var(--accent)]/15 border-[var(--accent)]/40 text-[var(--accent)]'
-                      : 'bg-[var(--bg3)] border-[var(--border)] text-[var(--text3)] hover:border-[var(--accent)]/30'
-                  }`}
-                >
-                  {m >= 60 ? `${m / 60}h` : `${m}m`}
-                </button>
-              ))}
+              {[15, 30, 60, 120].map(m => {
+                const isMatch = durationUnit === 'mins' ? duration === String(m) : duration === String(m / 60);
+                return (
+                  <button
+                    key={m}
+                    onClick={() => {
+                      if (m >= 60) {
+                        setDurationUnit('hrs');
+                        setDuration(String(m / 60));
+                      } else {
+                        setDurationUnit('mins');
+                        setDuration(String(m));
+                      }
+                    }}
+                    className={`flex-1 py-1.5 rounded-lg text-[10px] font-mono font-bold border transition-all duration-200 ${
+                      isMatch
+                        ? 'bg-[var(--accent)]/15 border-[var(--accent)]/40 text-[var(--accent)]'
+                        : 'bg-[var(--bg3)] border-[var(--border)] text-[var(--text3)] hover:border-[var(--accent)]/30'
+                    }`}
+                  >
+                    {m >= 60 ? `${m / 60}h` : `${m}m`}
+                  </button>
+                );
+              })}
             </div>
 
             {/* Submit */}
