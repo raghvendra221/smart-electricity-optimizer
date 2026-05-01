@@ -30,18 +30,15 @@ def generate_ai_insights(data):
 
         # Dynamically fetch available models
         try:
-            available_models = []
-            for m in client.models.list():
-                if "generateContent" in m.supported_generation_methods:
-                    available_models.append(m.name.replace("models/", ""))
+            available_models = [m.name.replace("models/", "") for m in client.models.list()]
             
             # Prioritize flash or pro models if available
-            preferred = ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-pro", "gemini-1.5-flash-latest"]
+            preferred = ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash", "gemini-flash-latest"]
             models_to_try = [m for m in preferred if m in available_models] + available_models
             if not models_to_try:
-                models_to_try = ["gemini-1.5-flash", "gemini-1.5-pro"]
+                models_to_try = ["gemini-2.5-flash", "gemini-2.0-flash"]
         except Exception:
-            models_to_try = ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-pro"]
+            models_to_try = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-flash-latest"]
             
         response = None
         last_error = None

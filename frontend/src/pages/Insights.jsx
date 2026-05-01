@@ -1,5 +1,6 @@
 // pages/Insights.jsx
 import React, { useEffect, useState } from 'react';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip } from 'recharts';
 import { getInsights } from '../services/api.js';
 import { StatCard, LoadingScreen, EmptyState, Badge } from '../components/ui/index.jsx';
 import { formatCurrency } from '../utils/electricity.js';
@@ -19,7 +20,8 @@ export default function Insights() {
     total_units: 0,
     estimated_bill: 0,
     top_appliance: null,
-    appliances: {}
+    appliances: {},
+    appliance_costs: {}
   });
   const [loading, setLoading] = useState(true);
   const { addToast } = useToast();
@@ -33,7 +35,8 @@ export default function Insights() {
           total_units: response.total_units || 0,
           estimated_bill: response.estimated_bill || 0,
           top_appliance: response.top_appliance || null,
-          appliances: response.appliances || {}
+          appliances: response.appliances || {},
+          appliance_costs: response.appliance_costs || {}
         });
       } catch (error) {
         console.error('Error loading insights:', error);
@@ -47,9 +50,17 @@ export default function Insights() {
 
   if (loading) return <LoadingScreen message="Analyzing your usage..." />;
 
-  const { insights, total_units, estimated_bill, top_appliance } = data;
+  const { insights, total_units, estimated_bill, top_appliance, appliances, appliance_costs } = data;
   const totalSavings = insights.reduce((s, i) => s + (i.potentialSaving || 0), 0);
   const actionCount = insights.filter((i) => i.type !== 'good').length;
+
+  const chartData = Object.keys(appliances).map((name) => ({
+    name,
+    value: appliances[name],
+    cost: appliance_costs[name] || 0
+  })).sort((a, b) => b.value - a.value);
+
+  const COLORS = ['var(--accent)', 'var(--accent2)', 'var(--accent3)', 'var(--green)', '#8b5cf6', '#ec4899'];
 
   return (
     <div>
@@ -77,13 +88,13 @@ export default function Insights() {
       {/* Usage Summary - All calculations from backend */}
       <div className="grid grid-cols-3 gap-3 mb-5">
         <StatCard
-          label="Total Units Consumed"
+          label="Total Units Consumed (This Month)"
           value={total_units.toFixed(2)}
           sub="kWh this month"
           accentColor="var(--accent)"
         />
         <StatCard
-          label="Estimated Bill"
+          label="Estimated Bill (Monthly)"
           value={formatCurrency(estimated_bill)}
           sub="Slab-based billing"
           accentColor="var(--accent2)"
@@ -92,9 +103,60 @@ export default function Insights() {
           label="Top Appliance"
           value={top_appliance || 'N/A'}
           sub="Highest consumption"
-          accentColor="var(--warning)"
+          accentColor="var(--accent3)"
         />
       </div>
+
+      {/* Appliance Split Donut Chart */}
+      {chartData.length > 0 && (
+        <div className="mb-5 bg-[var(--card)] border border-[var(--border)] rounded-2xl p-5">
+          <h3 className="text-sm font-semibold text-[var(--text)] mb-4">Appliance Split</h3>
+          <div className="flex flex-col md:flex-row items-center gap-6">
+            <div className="w-48 h-48 shrink-0">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={chartData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={60}
+                    outerRadius={80}
+                    paddingAngle={2}
+                    dataKey="value"
+                    stroke="none"
+                  >
+                    {chartData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <RechartsTooltip 
+                    contentStyle={{ backgroundColor: 'var(--card2)', borderColor: 'var(--border)', borderRadius: '0.75rem', fontSize: '12px' }}
+                    itemStyle={{ color: 'var(--text)' }}
+                    formatter={(value, name) => [`${value.toFixed(2)} kWh`, name]}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+            
+            <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-3 w-full">
+              {chartData.map((entry, index) => (
+                <div key={entry.name} className="flex items-center justify-between p-3 rounded-xl bg-[var(--bg3)] border border-[var(--border)]">
+                  <div className="flex items-center gap-3">
+                    <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: COLORS[index % COLORS.length] }}></div>
+                    <div>
+                      <div className="text-sm font-medium text-[var(--text)]">{entry.name}</div>
+                      <div className="text-[10px] text-[var(--text3)] font-mono">{entry.value.toFixed(2)} kWh</div>
+                    </div>
+                  </div>
+                  <div className="text-sm font-bold text-[var(--text2)]">
+                    {formatCurrency(entry.cost)}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Insight Cards */}
       {insights.length === 0 ? (
