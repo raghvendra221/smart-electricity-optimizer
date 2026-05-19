@@ -67,7 +67,7 @@ def generate_ai_insights(analysis):
                 break
             except Exception as e:
                 last_error = e
-                print(f"Model {model} failed, trying next...")
+                print(f"Model {model} failed: {e}. Trying next...")
                 continue
         
         if not response:
@@ -130,7 +130,7 @@ def get_chat_response(message, context=None):
                 return response.text
             except Exception as e:
                 last_error = e
-                print(f"Chat model {model} failed, trying next...")
+                print(f"Chat model {model} failed: {e}. Trying next...")
                 continue
                 
         # If all models failed
