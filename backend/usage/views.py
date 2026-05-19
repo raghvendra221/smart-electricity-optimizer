@@ -17,9 +17,14 @@ class AddUsageView(APIView):
         try:
             appliance_id = request.data.get("appliance_id")
             hours = float(request.data.get("hours_used", 0))
+            quantity = int(request.data.get("quantity", 1))
 
             if hours < 0:
                 return Response({"error": "hours_used must be >= 0"}, status=400)
+            if hours > 24:
+                return Response({"error": "Runtime cannot exceed 24 hours per day"}, status=400)
+            if quantity < 1:
+                return Response({"error": "quantity must be >= 1"}, status=400)
 
             appliance = Appliance.objects(
                 id=ObjectId(appliance_id),
@@ -29,11 +34,12 @@ class AddUsageView(APIView):
             if not appliance:
                 return Response({"error": "Appliance not found or not owned by user"}, status=404)
 
-            # Logic: units = (wattage × hours_used) / 1000
-            units = (appliance.wattage * hours) / 1000
+            # Logic: units = (wattage × hours_used × quantity) / 1000
+            units = (appliance.wattage * hours * quantity) / 1000
             original_units = units
             is_automated = False
-            print(f"[DEBUG] AddUsageView: {appliance.name} original units calculation: {round(units, 4)}")
+            total_hours = hours * quantity
+            print(f"[DEBUG] AddUsageView: {appliance.name} x{quantity} original units calculation: {round(units, 4)}")
 
             # Apply automation rule if exists
             rule = AutomationRule.objects(user=request.user, appliance=appliance).first()
@@ -58,7 +64,7 @@ class AddUsageView(APIView):
             ).order_by('-date').first()
 
             if usage:
-                usage.hours_used = (usage.hours_used or 0) + hours
+                usage.hours_used = (usage.hours_used or 0) + total_hours
                 usage.units_consumed = (usage.units_consumed or 0) + units
                 usage.original_units = (usage.original_units or 0) + original_units
                 usage.is_automated = is_automated or usage.is_automated
@@ -67,7 +73,7 @@ class AddUsageView(APIView):
                 usage = Usage(
                     user=request.user,
                     appliance=appliance,
-                    hours_used=hours,
+                    hours_used=total_hours,
                     units_consumed=units,
                     original_units=original_units,
                     is_automated=is_automated,

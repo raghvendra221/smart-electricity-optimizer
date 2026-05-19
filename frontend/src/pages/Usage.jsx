@@ -48,6 +48,7 @@ export default function Usage() {
   const [selectedAppliance, setSelectedAppliance] = useState('');
   const [duration, setDuration] = useState('');
   const [durationUnit, setDurationUnit] = useState('mins');
+  const [quantity, setQuantity] = useState(1);
   const [saving, setSaving] = useState(false);
 
   const { addToast } = useToast();
@@ -91,12 +92,19 @@ export default function Usage() {
     if (!selectedAppliance) { addToast('Select an appliance', 'error'); return; }
     const rawDuration = parseFloat(duration);
     if (!rawDuration || rawDuration <= 0) { addToast('Enter valid duration', 'error'); return; }
+    const q = parseInt(quantity, 10);
+    if (!q || q < 1) { addToast('Enter valid quantity', 'error'); return; }
     const mins = durationUnit === 'hrs' ? rawDuration * 60 : rawDuration;
+    const hours = mins / 60;
+
+    if (hours > 24) {
+      addToast('Runtime cannot exceed 24 hours in a single day.', 'error');
+      return;
+    }
 
     setSaving(true);
     try {
-      const hours = mins / 60;
-      await logUsage({ applianceId: selectedAppliance, hours });
+      await logUsage({ applianceId: selectedAppliance, hours, quantity: q });
       addToast('Usage logged!', 'success');
 
       // Refresh all data
@@ -264,6 +272,22 @@ export default function Usage() {
                   <option key={a.id} value={a.id}>{a.name} ({a.wattage}W)</option>
                 ))}
               </select>
+            </div>
+
+            {/* Quantity */}
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[10px] font-mono text-[var(--text3)] uppercase tracking-widest">Quantity</label>
+              <div className="flex bg-[var(--bg3)] rounded-lg border border-[var(--border)] overflow-hidden">
+                <button type="button" onClick={() => setQuantity(Math.max(1, quantity - 1))} className="px-4 text-[var(--text3)] hover:text-[var(--text)] hover:bg-[var(--border)]/50 transition-colors border-r border-[var(--border)] font-bold">-</button>
+                <input
+                  type="number"
+                  min="1"
+                  value={quantity}
+                  onChange={e => setQuantity(parseInt(e.target.value) || 1)}
+                  className="flex-1 w-full bg-transparent text-center text-[var(--text)] py-2 text-sm outline-none font-mono"
+                />
+                <button type="button" onClick={() => setQuantity(quantity + 1)} className="px-4 text-[var(--text3)] hover:text-[var(--text)] hover:bg-[var(--border)]/50 transition-colors border-l border-[var(--border)] font-bold">+</button>
+              </div>
             </div>
 
             {/* Duration */}
