@@ -2,6 +2,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { sendChatMessage } from '../services/api.js';
 import { useToast } from '../context/ToastContext.jsx';
+import { FaRobot } from 'react-icons/fa';
 
 export default function Assistant() {
   const [chatMessages, setChatMessages] = useState([
@@ -114,8 +115,8 @@ export default function Assistant() {
       <div className="flex-1 bg-[var(--card)] border border-[var(--border)] rounded-[2rem] overflow-hidden flex flex-col shadow-xl shadow-[var(--accent)]/5">
         {/* Header */}
         <div className="p-6 border-b border-[var(--border)] flex items-center gap-4 bg-[var(--bg3)]">
-          <div className="w-12 h-12 rounded-full bg-[var(--accent)] flex items-center justify-center text-white font-bold shadow-lg shadow-[var(--accent)]/20 relative">
-            AI
+          <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-[var(--accent)] to-[var(--accent2)] flex items-center justify-center text-white font-bold shadow-lg shadow-[var(--accent)]/20 relative">
+            <FaRobot size={20} className="animate-pulse" />
             <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-[var(--card)]"></span>
           </div>
           <div>
