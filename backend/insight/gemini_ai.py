@@ -51,9 +51,16 @@ def generate_ai_insights(analysis):
         ]
         """
 
-        # Use hardcoded list of preferred models to avoid slow client.models.list() call
-        models_to_try = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]
+        # Use hardcoded list of preferred models (excluding retired gemini-1.5-flash)
+        models_to_try = [
+            "gemini-2.5-flash",
+            "gemini-2.0-flash",
+            "gemini-2.0-flash-lite",
+            "gemini-flash-latest",
+            "gemini-flash-lite-latest"
+        ]
             
+        import time
         response = None
         last_error = None
         
@@ -66,6 +73,20 @@ def generate_ai_insights(analysis):
                 print(f"Successfully used model: {model}")
                 break
             except Exception as e:
+                # If rate limited (429) or temporary service unavailable (503/500), retry after 1.2 seconds
+                if "429" in str(e) or "503" in str(e):
+                    print(f"Temporary error ({e}) for model {model}. Retrying in 1.2 seconds...")
+                    time.sleep(1.2)
+                    try:
+                        response = client.models.generate_content(
+                            model=model,
+                            contents=prompt,
+                        )
+                        print(f"Successfully used model after retry: {model}")
+                        break
+                    except Exception as retry_e:
+                        print(f"Retry failed for model {model}: {retry_e}")
+                        e = retry_e
                 last_error = e
                 print(f"Model {model} failed: {e}. Trying next...")
                 continue
@@ -116,9 +137,16 @@ def get_chat_response(message, context=None):
         
         User: {message}
         Personal Energy Analyst:"""
-        # Use hardcoded list of preferred models to avoid slow client.models.list() call
-        models_to_try = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]
+        # Use hardcoded list of preferred models (excluding retired gemini-1.5-flash)
+        models_to_try = [
+            "gemini-2.5-flash",
+            "gemini-2.0-flash",
+            "gemini-2.0-flash-lite",
+            "gemini-flash-latest",
+            "gemini-flash-lite-latest"
+        ]
             
+        import time
         last_error = None
         for model in models_to_try:
             try:
@@ -129,6 +157,20 @@ def get_chat_response(message, context=None):
                 print(f"Chat successfully used model: {model}")
                 return response.text
             except Exception as e:
+                # If rate limited (429) or temporary service unavailable (503/500), retry after 1.2 seconds
+                if "429" in str(e) or "503" in str(e):
+                    print(f"Temporary error ({e}) for chat model {model}. Retrying in 1.2 seconds...")
+                    time.sleep(1.2)
+                    try:
+                        response = client.models.generate_content(
+                            model=model,
+                            contents=prompt,
+                        )
+                        print(f"Chat successfully used model after retry: {model}")
+                        return response.text
+                    except Exception as retry_e:
+                        print(f"Retry failed for chat model {model}: {retry_e}")
+                        e = retry_e
                 last_error = e
                 print(f"Chat model {model} failed: {e}. Trying next...")
                 continue
