@@ -26,4 +26,9 @@ def connect_db():
         print(f"Please check your network connection, username/password,")
         print(f"and make sure your IP is whitelisted on MongoDB Atlas.")
         print(f"========================================================\n")
-        raise e
+        
+        import sys
+        if 'collectstatic' in sys.argv:
+            print("[WARNING] Database connection failed, but proceeding since 'collectstatic' is running.")
+        else:
+            raise e
