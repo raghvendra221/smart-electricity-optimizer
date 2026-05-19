@@ -121,20 +121,38 @@ def generate_ai_insights(analysis):
 def get_chat_response(message, context=None):
     try:
         prompt = f"""
-        You are an AI Electricity Usage Assistant for the Smart Electricity Optimizer app. 
-        Your goal is to help users understand their energy consumption and save money.
-        Be professional, friendly, and concise.
-        
-        User Context: {context}
+        {context}
         
         User: {message}
-        AI Assistant:"""
-        
-        response = client.models.generate_content(
-            model="gemini-2.0-flash",
-            contents=prompt,
-        )
-        return response.text
+        Personal Energy Analyst:"""
+        # Try multiple models to avoid rate limiting on free tier
+        try:
+            available_models = [m.name.replace("models/", "") for m in client.models.list()]
+            preferred = ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash", "gemini-1.5-flash", "gemini-flash-latest"]
+            models_to_try = [m for m in preferred if m in available_models] + available_models
+            if not models_to_try:
+                models_to_try = ["gemini-2.0-flash", "gemini-1.5-flash"]
+        except Exception:
+            models_to_try = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-flash-latest"]
+            
+        last_error = None
+        for model in models_to_try:
+            try:
+                response = client.models.generate_content(
+                    model=model,
+                    contents=prompt,
+                )
+                print(f"Chat successfully used model: {model}")
+                return response.text
+            except Exception as e:
+                last_error = e
+                print(f"Chat model {model} failed, trying next...")
+                continue
+                
+        # If all models failed
+        if last_error and "429" in str(last_error):
+            return "I am currently processing too many requests. Please wait a few seconds and try again."
+        return "I'm having trouble analyzing your energy data right now. Could you please try again later?"
     except Exception as e:
         print("Error in chat:", e)
-        return "I'm here to help! Could you please rephrase that or ask about something else related to your electricity usage?"
+        return "I am experiencing technical difficulties. Please try again later."

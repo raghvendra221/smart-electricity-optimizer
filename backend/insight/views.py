@@ -168,23 +168,39 @@ class ChatView(APIView):
             analysis = analyze_usage(request.user)
             
             # 2. Build rich context for Gemini
+            appliance_details = ""
+            total_units = analysis.get('monthly_units', 0)
+            if total_units > 0:
+                sorted_appliances = sorted(analysis['appliance_data'].items(), key=lambda item: item[1], reverse=True)
+                for name, units in sorted_appliances:
+                    percentage = round((units / total_units) * 100, 1)
+                    appliance_details += f"  - {name}: {round(units, 1)} kWh ({percentage}% of total)\n"
+            else:
+                appliance_details = "  - No appliance usage logged yet."
+
+            today_mult = round(analysis['today_units'] / max(analysis['daily_avg'], 1), 1)
+
             context = f"""
-            You are assisting a user with their electricity consumption.
-            CURRENT MONTH STATUS:
-            - Monthly Usage: {round(analysis['monthly_units'], 2)} kWh
-            - Estimated Bill: ₹{round(analysis['total_cost'], 2)}
-            - Top Appliance: {analysis['top_appliance']} (consuming {round(analysis['top_units'], 2)} kWh)
-            - Total Savings this month: ₹{round(calculate_bill(analysis['savings_monthly']), 2)}
+            You are a "Personal Energy Analyst". Your job is to answer queries using the exact data provided below. Do not use generic answers; ALWAYS use the data.
+
+            DATA SUMMARY:
+            - Current Bill Estimated: ₹{round(analysis['total_cost'], 2)}
+            - Total Monthly Usage: {round(analysis['monthly_units'], 1)} kWh
+            - Today's Usage: {round(analysis['today_units'], 1)} kWh (7-Day Average: {round(analysis['daily_avg'], 1)} kWh)
+            - Today's usage is {today_mult}x the daily average.
+            - Total Savings: ₹{round(calculate_bill(analysis['savings_monthly']), 2)}
             
-            TODAY'S ACTIVITY:
-            - Today's Usage: {round(analysis['today_units'], 2)} kWh
-            - 7-Day Average: {round(analysis['daily_avg'], 2)} kWh
-            - Difference: {round((analysis['today_units'] - analysis['daily_avg']), 2)} kWh
+            APPLIANCE BREAKDOWN (Highest to Lowest):
+{appliance_details}
             
-            ADVICE GUIDELINES:
-            - Mention specific numbers from above.
-            - If today's usage is > average, suggest why and how to reduce it.
-            - If savings are low, suggest enabling automation rules.
+            GUIDELINES FOR YOUR BEHAVIOR:
+            1. Explain High Consumption: If asked why a bill is high, explicitly name the top contributing appliances and their % contribution. Suggest specific hour/runtime reductions and calculate the ₹ savings.
+            2. Appliance-Specific Suggestions: If asked about a specific appliance, mention its exact kWh usage and provide 3 actionable bullet points (like eco-mode, temp adjustments, avoiding peak hours) with estimated ₹ savings.
+            3. Anomaly Detection: If asked about unusual activity, compare today's usage with the daily average. State if it's "X times higher" and blame the top appliance.
+            4. Bill Forecasting: If asked about the bill, quote the exact "Current Bill Estimated" above, and suggest how optimizations can reduce it.
+            5. Smart Comparisons: If asked what wastes the most electricity, output a numbered list of the top appliances and their kWh.
+
+            Maintain a highly intelligent, analytical, and data-driven tone. Keep responses extremely concise and to the point.
             """
             
             reply = get_chat_response(message, context)

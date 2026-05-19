@@ -5,7 +5,7 @@ import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid 
 } from 'recharts';
 import { 
-  getInsights, getUsageHistory, applyAutomation, removeAutomation, sendChatMessage 
+  getInsights, getUsageHistory, applyAutomation, removeAutomation
 } from '../services/api.js';
 import { StatCard, LoadingScreen, EmptyState, Badge } from '../components/ui/index.jsx';
 import { formatCurrency } from '../utils/electricity.js';
@@ -33,14 +33,6 @@ export default function Insights() {
   const [loading, setLoading] = useState(true);
   const [isApplying, setIsApplying] = useState(false);
   const { addToast } = useToast();
-
-  // Chat state
-  const [chatMessages, setChatMessages] = useState([
-    { role: 'assistant', content: 'Hello! I am your AI assistant. How can I help you optimize your electricity usage today?' }
-  ]);
-  const [inputMessage, setInputMessage] = useState('');
-  const [isChatting, setIsChatting] = useState(false);
-  const chatEndRef = useRef(null);
 
   const loadData = async (showLoading = true) => {
     if (showLoading) setLoading(true);
@@ -79,10 +71,6 @@ export default function Insights() {
     loadData();
   }, []);
 
-  useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [chatMessages]);
-
   if (loading) return <LoadingScreen message="Analyzing your usage..." />;
 
   const { insights, total_units, estimated_bill, top_appliance, appliances, appliance_costs, automated_appliances } = data;
@@ -119,24 +107,6 @@ export default function Insights() {
       addToast('Failed to deactivate automation', 'error');
     } finally {
       setIsApplying(false);
-    }
-  };
-
-  const handleSendMessage = async (msg = inputMessage) => {
-    const text = msg.trim();
-    if (!text) return;
-
-    setChatMessages(prev => [...prev, { role: 'user', content: text }]);
-    setInputMessage('');
-    setIsChatting(true);
-
-    try {
-      const response = await sendChatMessage(text);
-      setChatMessages(prev => [...prev, { role: 'assistant', content: response.reply }]);
-    } catch (error) {
-      addToast('Failed to send message', 'error');
-    } finally {
-      setIsChatting(false);
     }
   };
 
@@ -324,72 +294,6 @@ export default function Insights() {
               </div>
             );
           })}
-        </div>
-      </div>
-
-      {/* AI Chatbot Section */}
-      <div className="mt-12 bg-[var(--card)] border border-[var(--border)] rounded-[2rem] overflow-hidden">
-        <div className="p-6 border-b border-[var(--border)] flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-[var(--accent)] flex items-center justify-center text-white font-bold">AI</div>
-          <div>
-            <h3 className="font-bold text-[var(--text)]">Electricity Assistant</h3>
-            <p className="text-[10px] text-[var(--text3)]">Always active • Ready to help</p>
-          </div>
-        </div>
-
-        <div className="p-6 h-80 overflow-y-auto space-y-4 bg-[var(--bg)]">
-          {chatMessages.map((m, i) => (
-            <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-              <div className={`max-w-[80%] p-4 rounded-2xl text-sm ${
-                m.role === 'user' 
-                  ? 'bg-[var(--accent)] text-white rounded-tr-none' 
-                  : 'bg-[var(--card)] border border-[var(--border)] text-[var(--text)] rounded-tl-none'
-              }`}>
-                {m.content}
-              </div>
-            </div>
-          ))}
-          {isChatting && (
-            <div className="flex justify-start">
-              <div className="bg-[var(--card)] border border-[var(--border)] p-4 rounded-2xl rounded-tl-none text-xs text-[var(--text3)] animate-pulse">
-                Thinking...
-              </div>
-            </div>
-          )}
-          <div ref={chatEndRef} />
-        </div>
-
-        <div className="p-6 bg-[var(--card2)]">
-          <div className="flex flex-wrap gap-2 mb-4">
-            {['Analyze my bill', 'Reduce usage', 'Optimize AC'].map(action => (
-              <button 
-                key={action}
-                onClick={() => handleSendMessage(action)}
-                className="px-4 py-2 bg-[var(--card)] border border-[var(--border)] hover:border-[var(--accent)] text-[var(--text2)] text-xs rounded-full transition-colors"
-              >
-                {action}
-              </button>
-            ))}
-          </div>
-          <form 
-            onSubmit={(e) => { e.preventDefault(); handleSendMessage(); }}
-            className="flex gap-2"
-          >
-            <input 
-              type="text" 
-              value={inputMessage}
-              onChange={(e) => setInputMessage(e.target.value)}
-              placeholder="Ask anything about your usage..."
-              className="flex-1 bg-[var(--bg)] border border-[var(--border)] rounded-xl px-4 py-3 text-sm text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"
-            />
-            <button 
-              type="submit"
-              disabled={isChatting || !inputMessage.trim()}
-              className="px-6 py-3 bg-[var(--accent)] hover:bg-[var(--accent-hover)] disabled:opacity-50 text-white font-bold rounded-xl transition-colors"
-            >
-              Send
-            </button>
-          </form>
         </div>
       </div>
     </div>

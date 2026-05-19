@@ -11,6 +11,7 @@ import Dashboard from './pages/Dashboard.jsx';
 import Appliances from './pages/Appliances.jsx';
 import Usage from './pages/Usage.jsx';
 import Insights from './pages/Insights.jsx';
+import Assistant from './pages/Assistant.jsx';
 
 export default function App() {
   return (
@@ -29,6 +30,7 @@ export default function App() {
                 <Route path="/appliances" element={<Appliances />} />
                 <Route path="/usage"      element={<Usage />} />
                 <Route path="/insights"   element={<Insights />} />
+                <Route path="/assistant"  element={<Assistant />} />
               </Route>
             </Route>
 
