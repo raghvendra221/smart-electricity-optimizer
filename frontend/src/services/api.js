@@ -1,7 +1,7 @@
 // services/api.js
 // Reusable fetch wrapper — swap BASE_URL to point at your real backend
 
-const BASE_URL = 'http://127.0.0.1:8000/api';
+const BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000/api';
 
 const getToken = () => localStorage.getItem('seuo_token');
 
