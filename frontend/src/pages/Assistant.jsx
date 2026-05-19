@@ -2,7 +2,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { sendChatMessage } from '../services/api.js';
 import { useToast } from '../context/ToastContext.jsx';
-import ReactMarkdown from 'react-markdown';
 
 export default function Assistant() {
   const [chatMessages, setChatMessages] = useState([
@@ -35,6 +34,76 @@ export default function Assistant() {
     }
   };
 
+  const parseMessageContent = (text, role) => {
+    if (!text) return null;
+    return text.split('\n').map((line, index) => {
+      let content = line.trim();
+      if (!content) return <div key={index} className="h-2" />;
+
+      let isBullet = false;
+      if (content.startsWith('•') || content.startsWith('-') || content.startsWith('*')) {
+        isBullet = true;
+        content = content.replace(/^[•\-*]\s*/, '');
+      }
+
+      // Check headings
+      if (content.startsWith('###')) {
+        return (
+          <h4 key={index} className={`text-sm font-semibold mt-4 mb-2 uppercase tracking-wider ${role === 'user' ? 'text-white' : 'text-[var(--accent)]'}`}>
+            {content.replace(/^###+\s*/, '')}
+          </h4>
+        );
+      }
+      if (content.startsWith('##')) {
+        return (
+          <h3 key={index} className={`text-base font-bold mt-4 mb-2 border-b border-[var(--border)] pb-1 ${role === 'user' ? 'text-white' : 'text-[var(--text)]'}`}>
+            {content.replace(/^##+\s*/, '')}
+          </h3>
+        );
+      }
+      if (content.startsWith('#')) {
+        return (
+          <h2 key={index} className={`text-lg font-bold mt-5 mb-2 ${role === 'user' ? 'text-white' : 'text-[var(--text)]'}`}>
+            {content.replace(/^#+\s*/, '')}
+          </h2>
+        );
+      }
+
+      // Parse bold text **text**
+      const parts = [];
+      const regex = /\*\*(.*?)\*\*/g;
+      let match;
+      let lastIndex = 0;
+      while ((match = regex.exec(content)) !== null) {
+        if (match.index > lastIndex) {
+          parts.push(content.substring(lastIndex, match.index));
+        }
+        parts.push(<strong key={match.index} className={`font-bold ${role === 'user' ? 'text-white' : 'text-[var(--text)]'}`}>{match[1]}</strong>);
+        lastIndex = regex.lastIndex;
+      }
+      if (lastIndex < content.length) {
+        parts.push(content.substring(lastIndex));
+      }
+
+      const displayContent = parts.length > 0 ? parts : content;
+
+      if (isBullet) {
+        return (
+          <div key={index} className="flex items-start gap-2 my-1 pl-3">
+            <span className={`${role === 'user' ? 'text-white' : 'text-[var(--accent)]'} select-none mt-0.5`}>•</span>
+            <span className={`text-sm flex-1 ${role === 'user' ? 'text-white' : 'text-[var(--text2)]'}`}>{displayContent}</span>
+          </div>
+        );
+      }
+
+      return (
+        <p key={index} className={`text-sm my-1 leading-relaxed ${role === 'user' ? 'text-white' : 'text-[var(--text2)]'}`}>
+          {displayContent}
+        </p>
+      );
+    });
+  };
+
   return (
     <div className="max-w-4xl mx-auto p-4 md:p-8 animate-fade-in flex flex-col h-[calc(100vh-80px)]">
       <div className="mb-6">
@@ -64,25 +133,7 @@ export default function Assistant() {
                   ? 'bg-[var(--accent)] text-white rounded-tr-none shadow-md shadow-[var(--accent)]/10' 
                   : 'bg-[var(--card)] border border-[var(--border)] text-[var(--text)] rounded-tl-none shadow-sm'
               }`}>
-                {m.role === 'user' ? (
-                  m.content
-                ) : (
-                  <ReactMarkdown 
-                    className="max-w-none text-[var(--text)] whitespace-pre-line"
-                    components={{
-                      h1: ({node, ...props}) => <h1 className="text-xl font-bold mt-4 mb-2 text-[var(--text)] border-b border-[var(--border)] pb-1" {...props} />,
-                      h2: ({node, ...props}) => <h2 className="text-lg font-bold mt-4 mb-2 text-[var(--text)]" {...props} />,
-                      h3: ({node, ...props}) => <h3 className="text-base font-bold mt-4 mb-2 text-[var(--accent)]" {...props} />,
-                      ul: ({node, ...props}) => <ul className="list-disc pl-5 my-2 space-y-1" {...props} />,
-                      ol: ({node, ...props}) => <ol className="list-decimal pl-5 my-2 space-y-1" {...props} />,
-                      li: ({node, ...props}) => <li className="text-sm leading-relaxed" {...props} />,
-                      strong: ({node, ...props}) => <strong className="font-bold text-[var(--accent2)]" {...props} />,
-                      p: ({node, ...props}) => <p className="mb-3 last:mb-0 leading-relaxed" {...props} />,
-                    }}
-                  >
-                    {m.content}
-                  </ReactMarkdown>
-                )}
+                {parseMessageContent(m.content, m.role)}
               </div>
             </div>
           ))}
