@@ -1,17 +1,22 @@
 // pages/Insights.jsx
-import React, { useEffect, useState } from 'react';
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip } from 'recharts';
-import { getInsights } from '../services/api.js';
+import React, { useEffect, useState, useRef } from 'react';
+import { 
+  PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip,
+  AreaChart, Area, XAxis, YAxis, CartesianGrid 
+} from 'recharts';
+import { 
+  getInsights, getUsageHistory, applyAutomation, removeAutomation, sendChatMessage 
+} from '../services/api.js';
 import { StatCard, LoadingScreen, EmptyState, Badge } from '../components/ui/index.jsx';
 import { formatCurrency } from '../utils/electricity.js';
 import { useToast } from '../context/ToastContext.jsx';
 
 const TYPE_STYLES = {
-  warning:  { bg: 'rgba(246,173,85,.08)',  border: 'rgba(246,173,85,.25)',  badge: 'amber',  label: 'Warning'  },
-  tip:      { bg: 'rgba(79,209,197,.08)',  border: 'rgba(79,209,197,.25)',  badge: 'cyan',   label: 'Tip'      },
-  schedule: { bg: 'rgba(124,106,255,.08)', border: 'rgba(124,106,255,.25)', badge: 'purple', label: 'Schedule' },
-  alert:    { bg: 'rgba(252,129,129,.08)', border: 'rgba(252,129,129,.25)', badge: 'red',    label: 'Alert'    },
-  good:     { bg: 'rgba(72,187,120,.08)',  border: 'rgba(72,187,120,.25)',  badge: 'green',  label: 'Good'     },
+  warning:  { bg: 'rgba(246,173,85,.08)',  border: 'rgba(246,173,85,.25)',  badge: 'amber',  label: 'Warning', icon: '⚠️'  },
+  tip:      { bg: 'rgba(79,209,197,.08)',  border: 'rgba(79,209,197,.25)',  badge: 'cyan',   label: 'Tip', icon: '💡'      },
+  schedule: { bg: 'rgba(124,106,255,.08)', border: 'rgba(124,106,255,.25)', badge: 'purple', label: 'Schedule', icon: '📅' },
+  alert:    { bg: 'rgba(252,129,129,.08)', border: 'rgba(252,129,129,.25)', badge: 'red',    label: 'Alert', icon: '🔴'    },
+  good:     { bg: 'rgba(72,187,120,.08)',  border: 'rgba(72,187,120,.25)',  badge: 'green',  label: 'Good', icon: '✅'     },
 };
 
 export default function Insights() {
@@ -21,39 +26,68 @@ export default function Insights() {
     estimated_bill: 0,
     top_appliance: null,
     appliances: {},
-    appliance_costs: {}
+    appliance_costs: {},
+    automated_appliances: []
   });
+  const [historyData, setHistoryData] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [isApplying, setIsApplying] = useState(false);
   const { addToast } = useToast();
 
-  useEffect(() => {
-    async function load() {
-      try {
-        const response = await getInsights();
-        setData({
-          insights: response.insights || [],
-          total_units: response.total_units || 0,
-          estimated_bill: response.estimated_bill || 0,
-          top_appliance: response.top_appliance || null,
-          appliances: response.appliances || {},
-          appliance_costs: response.appliance_costs || {}
-        });
-      } catch (error) {
-        console.error('Error loading insights:', error);
-        addToast('Failed to load insights', 'error');
-      } finally {
-        setLoading(false);
+  // Chat state
+  const [chatMessages, setChatMessages] = useState([
+    { role: 'assistant', content: 'Hello! I am your AI assistant. How can I help you optimize your electricity usage today?' }
+  ]);
+  const [inputMessage, setInputMessage] = useState('');
+  const [isChatting, setIsChatting] = useState(false);
+  const chatEndRef = useRef(null);
+
+  const loadData = async (showLoading = true) => {
+    if (showLoading) setLoading(true);
+    try {
+      const [insightsRes, historyRes] = await Promise.all([
+        getInsights(),
+        getUsageHistory('30d')
+      ]);
+      
+      setData({
+        insights: insightsRes.insights || [],
+        total_units: insightsRes.total_units || 0,
+        estimated_bill: insightsRes.estimated_bill || 0,
+        top_appliance: insightsRes.top_appliance || null,
+        appliances: insightsRes.appliances || {},
+        appliance_costs: insightsRes.appliance_costs || {},
+        automated_appliances: insightsRes.automated_appliances || []
+      });
+
+      if (historyRes.labels && historyRes.values) {
+        const formattedHistory = historyRes.labels.map((label, idx) => ({
+          date: label,
+          units: historyRes.values[idx]
+        }));
+        setHistoryData(formattedHistory);
       }
+    } catch (error) {
+      console.error('Error loading insights:', error);
+      addToast('Failed to load insights', 'error');
+    } finally {
+      setLoading(false);
     }
-    load();
-  }, [addToast]);
+  };
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [chatMessages]);
 
   if (loading) return <LoadingScreen message="Analyzing your usage..." />;
 
-  const { insights, total_units, estimated_bill, top_appliance, appliances, appliance_costs } = data;
+  const { insights, total_units, estimated_bill, top_appliance, appliances, appliance_costs, automated_appliances } = data;
   const totalSavings = insights.reduce((s, i) => s + (i.potentialSaving || 0), 0);
-  const actionCount = insights.filter((i) => i.type !== 'good').length;
-
+  
   const chartData = Object.keys(appliances).map((name) => ({
     name,
     value: appliances[name],
@@ -62,144 +96,302 @@ export default function Insights() {
 
   const COLORS = ['var(--accent)', 'var(--accent2)', 'var(--accent3)', 'var(--green)', '#8b5cf6', '#ec4899'];
 
+  const handleApplyAutomation = async (applianceId = null) => {
+    setIsApplying(true);
+    try {
+      await applyAutomation(applianceId);
+      addToast('Automation applied successfully!', 'success');
+      await loadData(false);
+    } catch (error) {
+      addToast('Failed to apply automation', 'error');
+    } finally {
+      setIsApplying(false);
+    }
+  };
+
+  const handleRemoveAutomation = async (applianceId = null) => {
+    setIsApplying(true);
+    try {
+      await removeAutomation(applianceId);
+      addToast('Automation deactivated', 'info');
+      await loadData(false);
+    } catch (error) {
+      addToast('Failed to deactivate automation', 'error');
+    } finally {
+      setIsApplying(false);
+    }
+  };
+
+  const handleSendMessage = async (msg = inputMessage) => {
+    const text = msg.trim();
+    if (!text) return;
+
+    setChatMessages(prev => [...prev, { role: 'user', content: text }]);
+    setInputMessage('');
+    setIsChatting(true);
+
+    try {
+      const response = await sendChatMessage(text);
+      setChatMessages(prev => [...prev, { role: 'assistant', content: response.reply }]);
+    } catch (error) {
+      addToast('Failed to send message', 'error');
+    } finally {
+      setIsChatting(false);
+    }
+  };
+
+  const highImpact = insights[0];
+  const otherInsights = insights.slice(1);
+  const activeRule = top_appliance && automated_appliances?.find(a => 
+    a.name.toLowerCase().trim() === top_appliance.toLowerCase().trim()
+  );
+  const isAutomated = !!activeRule;
+
   return (
-    <div>
-      <div className="mb-5">
-        <h2 className="text-lg font-semibold text-[var(--text)]">Smart Insights</h2>
-        <p className="text-xs text-[var(--text3)] font-mono mt-0.5">AI-powered recommendations for your usage</p>
+    <div className="pb-10">
+      <div className="mb-6 flex justify-between items-center">
+        <div>
+          <h2 className="text-2xl font-bold text-[var(--text)]">AI Insights</h2>
+          <p className="text-sm text-[var(--text3)] mt-1">Smart recommendations tailored to your household's energy footprint.</p>
+        </div>
+        <div className="flex items-center gap-2 px-4 py-2 bg-[var(--card)] border border-[var(--border)] rounded-xl">
+          <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
+          <span className="text-xs font-bold text-[var(--text2)]">Score: {data.efficiency_score || 0}%</span>
+        </div>
       </div>
 
-      {/* Summary */}
-      <div className="grid grid-cols-2 gap-3 mb-5">
-        <StatCard
-          label="Potential Monthly Savings"
-          value={formatCurrency(totalSavings)}
-          sub="If all tips are followed"
-          accentColor="var(--green)"
-        />
-        <StatCard
-          label="Action Items"
-          value={actionCount}
-          sub="Recommendations pending"
-          accentColor="var(--accent2)"
-        />
+      {/* 1. Summary Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <StatCard label="Total Units (Monthly)" value={`${total_units.toFixed(1)} kWh`} sub="Measured this month" accentColor="var(--accent)" />
+        <StatCard label="Estimated Bill" value={formatCurrency(estimated_bill)} sub="Based on current usage" accentColor="var(--accent2)" />
+        <StatCard label="Top Appliance" value={top_appliance || 'N/A'} sub="Highest consumer" accentColor="var(--accent3)" />
+        <StatCard label="Potential Savings" value={formatCurrency(totalSavings)} sub="If optimized" accentColor="var(--green)" />
       </div>
 
-      {/* Usage Summary - All calculations from backend */}
-      <div className="grid grid-cols-3 gap-3 mb-5">
-        <StatCard
-          label="Total Units Consumed (This Month)"
-          value={total_units.toFixed(2)}
-          sub="kWh this month"
-          accentColor="var(--accent)"
-        />
-        <StatCard
-          label="Estimated Bill (Monthly)"
-          value={formatCurrency(estimated_bill)}
-          sub="Slab-based billing"
-          accentColor="var(--accent2)"
-        />
-        <StatCard
-          label="Top Appliance"
-          value={top_appliance || 'N/A'}
-          sub="Highest consumption"
-          accentColor="var(--accent3)"
-        />
+      {/* 2. Usage Graph */}
+      <div className="mb-6 bg-[var(--card)] border border-[var(--border)] rounded-2xl p-5">
+        <div className="flex justify-between items-center mb-6">
+          <h3 className="text-sm font-semibold text-[var(--text)]">Consumption Trend (30 Days)</h3>
+          <div className="text-[10px] font-mono text-[var(--text3)]">Units in kWh</div>
+        </div>
+        <div className="h-64 w-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={historyData}>
+              <defs>
+                <linearGradient id="colorUnits" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="var(--accent)" stopOpacity={0.3}/>
+                  <stop offset="95%" stopColor="var(--accent)" stopOpacity={0}/>
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+              <XAxis 
+                dataKey="date" 
+                axisLine={false} 
+                tickLine={false} 
+                tick={{fill: 'var(--text3)', fontSize: 10}} 
+                minTickGap={30}
+              />
+              <YAxis 
+                axisLine={false} 
+                tickLine={false} 
+                tick={{fill: 'var(--text3)', fontSize: 10}} 
+              />
+              <RechartsTooltip 
+                contentStyle={{ backgroundColor: 'var(--card2)', border: '1px solid var(--border)', borderRadius: '12px' }}
+                itemStyle={{ color: 'var(--text)', fontSize: '12px' }}
+                labelStyle={{ color: 'var(--text2)', marginBottom: '4px', fontSize: '10px' }}
+                formatter={(value) => [`${value} kWh`, 'Usage']}
+              />
+              <Area 
+                type="monotone" 
+                dataKey="units" 
+                stroke="var(--accent)" 
+                fillOpacity={1} 
+                fill="url(#colorUnits)" 
+                strokeWidth={2}
+              />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
       </div>
 
-      {/* Appliance Split Donut Chart */}
-      {chartData.length > 0 && (
-        <div className="mb-5 bg-[var(--card)] border border-[var(--border)] rounded-2xl p-5">
-          <h3 className="text-sm font-semibold text-[var(--text)] mb-4">Appliance Split</h3>
-          <div className="flex flex-col md:flex-row items-center gap-6">
-            <div className="w-48 h-48 shrink-0">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={chartData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={60}
-                    outerRadius={80}
-                    paddingAngle={2}
-                    dataKey="value"
-                    stroke="none"
-                  >
-                    {chartData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <RechartsTooltip 
-                    contentStyle={{ backgroundColor: 'var(--card2)', borderColor: 'var(--border)', borderRadius: '0.75rem', fontSize: '12px' }}
-                    itemStyle={{ color: 'var(--text)' }}
-                    formatter={(value, name) => [`${value.toFixed(2)} kWh`, name]}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-            
-            <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-3 w-full">
-              {chartData.map((entry, index) => (
-                <div key={entry.name} className="flex items-center justify-between p-3 rounded-xl bg-[var(--bg3)] border border-[var(--border)]">
-                  <div className="flex items-center gap-3">
-                    <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: COLORS[index % COLORS.length] }}></div>
-                    <div>
-                      <div className="text-sm font-medium text-[var(--text)]">{entry.name}</div>
-                      <div className="text-[10px] text-[var(--text3)] font-mono">{entry.value.toFixed(2)} kWh</div>
-                    </div>
-                  </div>
-                  <div className="text-sm font-bold text-[var(--text2)]">
-                    {formatCurrency(entry.cost)}
-                  </div>
-                </div>
-              ))}
+      {/* 3. Appliance Split */}
+      <div className="mb-6 bg-[var(--card)] border border-[var(--border)] rounded-2xl p-5">
+        <h3 className="text-sm font-semibold text-[var(--text)] mb-4">Appliance Consumption Split</h3>
+        <div className="flex flex-col md:flex-row items-center gap-8">
+          <div className="w-56 h-56 shrink-0 relative">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie data={chartData} cx="50%" cy="50%" innerRadius={70} outerRadius={95} paddingAngle={4} dataKey="value" stroke="none">
+                  {chartData.map((entry, index) => <Cell key={index} fill={COLORS[index % COLORS.length]} />)}
+                </Pie>
+                <RechartsTooltip contentStyle={{ backgroundColor: 'var(--card2)', borderRadius: '12px', border: '1px solid var(--border)' }} />
+              </PieChart>
+            </ResponsiveContainer>
+            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+              <span className="text-[10px] text-[var(--text3)] uppercase">Total</span>
+              <span className="text-lg font-bold text-[var(--text)]">{total_units.toFixed(1)}</span>
             </div>
           </div>
+          <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-3 w-full">
+            {chartData.map((entry, index) => (
+              <div key={entry.name} className="flex items-center justify-between p-3 rounded-xl bg-[var(--bg3)] border border-[var(--border)]">
+                <div className="flex items-center gap-3">
+                  <div className="w-3 h-3 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }}></div>
+                  <div className="text-sm font-medium text-[var(--text)]">{entry.name}</div>
+                </div>
+                <div className="text-xs font-mono text-[var(--text2)]">{entry.value.toFixed(1)} kWh</div>
+              </div>
+            ))}
+          </div>
         </div>
-      )}
+      </div>
 
-      {/* Insight Cards */}
-      {insights.length === 0 ? (
-        <EmptyState icon="💡" title="No insights yet" subtitle="Add appliances and log usage to get personalized recommendations." />
-      ) : (
-        <div className="space-y-3">
-          {insights.map((insight) => {
+      {/* 4 & 5. Insights Layout */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+        {/* High Impact Card */}
+        <div className="lg:col-span-2">
+          {highImpact ? (
+            <div className="w-full bg-[var(--card)] border border-[var(--border)] rounded-[2rem] p-8 text-[var(--text)] relative overflow-hidden flex flex-col shadow-xl shadow-[var(--accent)]/5">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-12 h-12 rounded-2xl bg-[var(--accent)]/10 flex items-center justify-center text-2xl text-[var(--accent)]">
+                  ⚡
+                </div>
+                <div>
+                  <h4 className="text-lg font-bold text-[var(--text)]">High Impact Insight</h4>
+                  <p className="text-xs text-[var(--text3)] font-medium">Optimal Saving Potential</p>
+                </div>
+              </div>
+              
+              <h3 className="text-2xl font-bold mb-3 leading-tight text-[var(--text)]">{highImpact.title}</h3>
+              <p className="text-[var(--text2)] text-sm leading-relaxed mb-8">{highImpact.description}</p>
+              
+              <div className="mb-6">
+                <h5 className="text-xs font-bold text-[var(--text)] uppercase tracking-wider mb-4 opacity-80">Recommended Actions:</h5>
+                <ul className="space-y-3">
+                  {(highImpact.recommended_actions || [
+                    `Optimize ${top_appliance || 'appliance'} usage during peak hours`,
+                    "Enable power-saving or eco mode",
+                    "Avoid continuous operation"
+                  ]).map((action, idx) => (
+                    <li key={idx} className="flex items-start gap-3 text-sm text-[var(--text2)]">
+                      <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent)] shrink-0 mt-1.5"></span>
+                      <span className="leading-relaxed">{action}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              
+              <div className="mt-6 pt-6 border-t border-[var(--border)]">
+                <div className="inline-flex items-center gap-4">
+                  <div className="px-5 py-3 bg-[var(--bg3)] rounded-xl border border-[var(--border)]">
+                    <div className="text-[10px] text-[var(--text3)] font-mono uppercase mb-0.5">Estimated Savings</div>
+                    <div className="text-[var(--accent)] font-bold text-lg">₹{highImpact.potentialSaving}/mo</div>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="absolute top-8 right-8 text-[var(--text3)]">
+                <div className="flex gap-1">
+                  <div className="w-1.5 h-1.5 rounded-full bg-[var(--border)]"></div>
+                  <div className="w-1.5 h-1.5 rounded-full bg-[var(--border)]"></div>
+                  <div className="w-1.5 h-1.5 rounded-full bg-[var(--border)]"></div>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <EmptyState icon="⚡" title="No critical actions" subtitle="Everything is running efficiently." />
+          )}
+        </div>
+
+        {/* Remaining Insights */}
+        <div className="space-y-4">
+          {otherInsights.map((insight) => {
             const style = TYPE_STYLES[insight.type] || TYPE_STYLES.tip;
             return (
-              <div
-                key={insight.id}
-                className="flex gap-4 items-start rounded-xl p-4 border transition-all duration-200 hover:scale-[1.005]"
-                style={{ background: style.bg, borderColor: style.border }}
-              >
-                {/* Icon */}
-                <div className="w-10 h-10 rounded-xl flex items-center justify-center text-xl shrink-0"
-                  style={{ background: style.bg, border: `1px solid ${style.border}` }}>
-                  {insight.icon}
-                </div>
-
-                {/* Body */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-start justify-between gap-3">
-                    <h4 className="text-sm font-semibold text-[var(--text)] leading-snug">{insight.title}</h4>
-                    <Badge variant={style.badge}>{style.label}</Badge>
+              <div key={insight.id} className="bg-[var(--card)] border border-[var(--border)] rounded-[2rem] p-6">
+                <div className="flex justify-between items-start mb-4">
+                  <div className="w-10 h-10 rounded-full flex items-center justify-center bg-blue-50 text-xl">
+                    {insight.icon}
                   </div>
-                  <p className="text-xs text-[var(--text2)] mt-1.5 leading-relaxed">{insight.description}</p>
-                  {insight.potentialSaving > 0 ? (
-                    <div className="flex items-center gap-1.5 mt-2">
-                      <span className="text-[11px] font-mono text-green-400">💰</span>
-                      <span className="text-[11px] font-mono text-green-400">
-                        Save up to {formatCurrency(insight.potentialSaving)}/month
-                      </span>
-                    </div>
-                  ) : (
-                    <div className="text-[11px] font-mono text-[var(--accent)] mt-2">✓ No action needed</div>
-                  )}
+                  <Badge variant={style.badge}>{style.label}</Badge>
+                </div>
+                <h5 className="font-bold text-[var(--text)] mb-2">{insight.title}</h5>
+                <p className="text-xs text-[var(--text3)] leading-relaxed mb-4">{insight.description}</p>
+                <div className="text-[11px] font-bold text-[var(--accent2)]">
+                  Save {formatCurrency(insight.potentialSaving)}/mo
                 </div>
               </div>
             );
           })}
         </div>
-      )}
+      </div>
+
+      {/* AI Chatbot Section */}
+      <div className="mt-12 bg-[var(--card)] border border-[var(--border)] rounded-[2rem] overflow-hidden">
+        <div className="p-6 border-b border-[var(--border)] flex items-center gap-3">
+          <div className="w-10 h-10 rounded-full bg-[var(--accent)] flex items-center justify-center text-white font-bold">AI</div>
+          <div>
+            <h3 className="font-bold text-[var(--text)]">Electricity Assistant</h3>
+            <p className="text-[10px] text-[var(--text3)]">Always active • Ready to help</p>
+          </div>
+        </div>
+
+        <div className="p-6 h-80 overflow-y-auto space-y-4 bg-[var(--bg)]">
+          {chatMessages.map((m, i) => (
+            <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+              <div className={`max-w-[80%] p-4 rounded-2xl text-sm ${
+                m.role === 'user' 
+                  ? 'bg-[var(--accent)] text-white rounded-tr-none' 
+                  : 'bg-[var(--card)] border border-[var(--border)] text-[var(--text)] rounded-tl-none'
+              }`}>
+                {m.content}
+              </div>
+            </div>
+          ))}
+          {isChatting && (
+            <div className="flex justify-start">
+              <div className="bg-[var(--card)] border border-[var(--border)] p-4 rounded-2xl rounded-tl-none text-xs text-[var(--text3)] animate-pulse">
+                Thinking...
+              </div>
+            </div>
+          )}
+          <div ref={chatEndRef} />
+        </div>
+
+        <div className="p-6 bg-[var(--card2)]">
+          <div className="flex flex-wrap gap-2 mb-4">
+            {['Analyze my bill', 'Reduce usage', 'Optimize AC'].map(action => (
+              <button 
+                key={action}
+                onClick={() => handleSendMessage(action)}
+                className="px-4 py-2 bg-[var(--card)] border border-[var(--border)] hover:border-[var(--accent)] text-[var(--text2)] text-xs rounded-full transition-colors"
+              >
+                {action}
+              </button>
+            ))}
+          </div>
+          <form 
+            onSubmit={(e) => { e.preventDefault(); handleSendMessage(); }}
+            className="flex gap-2"
+          >
+            <input 
+              type="text" 
+              value={inputMessage}
+              onChange={(e) => setInputMessage(e.target.value)}
+              placeholder="Ask anything about your usage..."
+              className="flex-1 bg-[var(--bg)] border border-[var(--border)] rounded-xl px-4 py-3 text-sm text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"
+            />
+            <button 
+              type="submit"
+              disabled={isChatting || !inputMessage.trim()}
+              className="px-6 py-3 bg-[var(--accent)] hover:bg-[var(--accent-hover)] disabled:opacity-50 text-white font-bold rounded-xl transition-colors"
+            >
+              Send
+            </button>
+          </form>
+        </div>
+      </div>
     </div>
   );
 }

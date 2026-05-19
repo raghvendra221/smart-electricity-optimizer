@@ -43,7 +43,7 @@ def seed():
         date__lte=now
     )
 
-    weekly_units = sum(u.units_consumed for u in weekly_usage)
+    weekly_units = sum((u.units_consumed or 0) for u in weekly_usage)
     print(f"Verified weekly_units manually: {weekly_units}")
 
 seed()

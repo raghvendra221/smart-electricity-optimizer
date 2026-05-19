@@ -20,8 +20,8 @@ const ChartTooltip = ({ active, payload, label }) => {
     <div className="bg-[var(--card2)] border border-[var(--border)] rounded-xl px-3 py-2 text-xs shadow-xl backdrop-blur-sm">
       {label && <p className="text-[var(--text3)] mb-1 font-mono">{label}</p>}
       {payload.map((p, i) => (
-        <p key={i} style={{ color: p.color || 'var(--accent)' }}>
-          Usage: <span className="font-mono font-bold">{p.value} kWh</span>
+        <p key={i} style={{ color: p.color || (p.dataKey === 'kWh' ? 'var(--accent)' : 'var(--text3)') }}>
+          {p.name}: <span className="font-mono font-bold">{p.value} kWh</span>
         </p>
       ))}
     </div>
@@ -120,6 +120,7 @@ export default function Usage() {
   const chartData = (history.labels || []).map((label, i) => ({
     label,
     kWh: (history.values || [])[i] ?? 0,
+    original_kWh: (history.original_values || [])[i] ?? 0,
   }));
 
   const maxVal = Math.max(...chartData.map(d => d.kWh), 1);
@@ -148,20 +149,42 @@ export default function Usage() {
         <div className="bg-[var(--card)] border border-[var(--border)] rounded-2xl p-5">
           <div className="flex items-center gap-2 mb-3">
             <span className="w-7 h-7 rounded-lg bg-[var(--accent)]/15 flex items-center justify-center text-sm">⚡</span>
-            <span className="text-[10px] font-mono text-[var(--text3)] uppercase tracking-widest">Total Units Today</span>
+            <span className="text-[10px] font-mono text-[var(--text3)] uppercase tracking-widest">Units Today</span>
           </div>
-          <p className="text-3xl font-bold font-mono text-[var(--text)] leading-none">
-            {(summary.total_units ?? 0).toFixed(2)} <span className="text-base font-normal text-[var(--text3)]">kWh</span>
-          </p>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <p className="text-[10px] text-[var(--text3)] mb-1 uppercase">Optimized</p>
+              <p className="text-2xl font-bold font-mono text-[var(--accent)] leading-none">
+                {(summary.total_units ?? 0).toFixed(2)} <span className="text-xs font-normal">kWh</span>
+              </p>
+            </div>
+            <div className="border-l border-[var(--border)] pl-4 opacity-60">
+              <p className="text-[10px] text-[var(--text3)] mb-1 uppercase">Original</p>
+              <p className="text-2xl font-bold font-mono text-[var(--text3)] leading-none">
+                {(summary.original_total_units ?? summary.total_units ?? 0).toFixed(2)} <span className="text-xs font-normal">kWh</span>
+              </p>
+            </div>
+          </div>
         </div>
         <div className="bg-[var(--card)] border border-[var(--border)] rounded-2xl p-5">
           <div className="flex items-center gap-2 mb-3">
             <span className="w-7 h-7 rounded-lg bg-[var(--accent3)]/15 flex items-center justify-center text-sm">💰</span>
             <span className="text-[10px] font-mono text-[var(--text3)] uppercase tracking-widest">Estimated Bill</span>
           </div>
-          <p className="text-3xl font-bold font-mono text-[var(--text)] leading-none">
-            {formatCurrency(summary.estimated_bill ?? 0)}
-          </p>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <p className="text-[10px] text-[var(--text3)] mb-1 uppercase">With Opt</p>
+              <p className="text-2xl font-bold font-mono text-[var(--accent3)] leading-none">
+                {formatCurrency(summary.estimated_bill ?? 0)}
+              </p>
+            </div>
+            <div className="border-l border-[var(--border)] pl-4 opacity-60">
+              <p className="text-[10px] text-[var(--text3)] mb-1 uppercase">Without Opt</p>
+              <p className="text-2xl font-bold font-mono text-[var(--text3)] leading-none">
+                {formatCurrency(summary.original_estimated_bill ?? summary.estimated_bill ?? 0)}
+              </p>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -206,15 +229,8 @@ export default function Usage() {
                     tickFormatter={v => `${v} kWh`}
                   />
                   <Tooltip content={<ChartTooltip />} cursor={{ fill: 'rgba(79,209,197,0.06)' }} />
-                  <Bar dataKey="kWh" radius={[4, 4, 0, 0]}>
-                    {chartData.map((d, i) => (
-                      <Cell
-                        key={i}
-                        fill={d.kWh >= maxVal * 0.8 ? 'var(--accent)' : 'var(--accent2)'}
-                        fillOpacity={0.85}
-                      />
-                    ))}
-                  </Bar>
+                  <Bar dataKey="kWh" name="Optimized" radius={[4, 4, 0, 0]} fill="var(--accent)" fillOpacity={0.85} />
+                  <Bar dataKey="original_kWh" name="Original" radius={[4, 4, 0, 0]} fill="var(--text3)" fillOpacity={0.3} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -353,12 +369,31 @@ export default function Usage() {
                       <span className="text-xs font-mono text-[var(--text2)]">{log.duration ?? '—'}</span>
                     </td>
                     <td className="py-3 pr-4">
-                      <span className="text-xs font-mono font-bold text-[var(--accent)]">{log.energy ?? 0} kWh</span>
+                      <div className="flex flex-col">
+                        <span className="text-xs font-mono font-bold text-[var(--accent)]">{log.energy ?? 0} kWh</span>
+                        {log.is_automated && (
+                          <span className="text-[9px] font-mono text-[var(--text3)] line-through">
+                            {log.original_energy} kWh
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="py-3">
-                      <Badge variant={log.source === 'Auto' ? 'cyan' : 'purple'}>
-                        {log.source ?? 'Manual'}
-                      </Badge>
+                      <div className="flex items-center gap-2">
+                        <Badge variant={log.source?.startsWith('Auto') ? 'cyan' : 'purple'}>
+                          {log.source ?? 'Manual'}
+                        </Badge>
+                        {log.is_automated && (
+                          <div className="flex flex-col">
+                            <span className="text-[9px] text-green-400 font-bold flex items-center gap-0.5">
+                              🛡️ Optimized
+                            </span>
+                            <span className="text-[8px] text-green-500/80 font-mono">
+                              -{log.saved_energy} kWh
+                            </span>
+                          </div>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}

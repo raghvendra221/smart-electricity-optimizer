@@ -104,8 +104,8 @@ class ApplianceStatsView(APIView):
 
         for u in usage_data:
             aid = str(u.appliance.id)
-            usage_map[aid]["hours"] += u.hours_used
-            usage_map[aid]["units"] += u.units_consumed
+            usage_map[aid]["hours"] += (u.hours_used or 0)
+            usage_map[aid]["units"] += (u.units_consumed or 0)
 
         # Compute total bill once from total units (slab-based)
         total_units = sum(v["units"] for v in usage_map.values())

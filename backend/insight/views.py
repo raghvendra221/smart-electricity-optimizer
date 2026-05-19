@@ -1,138 +1,193 @@
-from django.shortcuts import render
+from datetime import datetime, timedelta
+from django.utils import timezone
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from usage.models import Usage
 from usage.utils import calculate_bill
-from .gemini_ai import generate_ai_insights
+from appliances.models import Appliance
+from .models import AutomationRule
+from .gemini_ai import generate_ai_insights, get_chat_response
+from bson import ObjectId
 import re
+
+from .analytics import analyze_usage, generate_insights, calculate_score
+
+from django.core.cache import cache
 
 class GeminiInsightsView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        usages = Usage.objects(user=request.user)
-
-        if not usages:
+        cache_key = f"insights_response_{request.user.id}"
+        cached_data = cache.get(cache_key)
+        if cached_data:
+            return Response(cached_data)
+            
+        # 1. Analyze Usage
+        analysis = analyze_usage(request.user)
+        
+        if analysis['monthly_units'] == 0 and analysis['today_units'] == 0:
             return Response({
                 "total_units": 0,
                 "estimated_bill": 0,
                 "top_appliance": None,
-                "insights": []
+                "insights": [],
+                "efficiency_score": 100,
+                "automated_appliances": []
             })
 
-        # Calculate total consumption
-        total_units = sum(u.units_consumed for u in usages)
-        total_cost = calculate_bill(total_units)
-
-        # Calculate appliance breakdown (units)
-        appliance_data = {}
-        for u in usages:
-            name = u.appliance.name
-            units = u.units_consumed
-            appliance_data[name] = appliance_data.get(name, 0) + units
-
-        # Proportional cost with remainder adjustment (last appliance absorbs rounding)
-        appliance_cost = {}
-        remaining = total_cost
-        appliance_names = list(appliance_data.keys())
-        for i, name in enumerate(appliance_names):
-            units = appliance_data[name]
-            if i == len(appliance_names) - 1 and total_units > 0:
-                appliance_cost[name] = round(remaining, 2)
-            elif total_units > 0:
-                cost = round((units / total_units) * total_cost, 2)
-                appliance_cost[name] = cost
-                remaining -= cost
-            else:
-                appliance_cost[name] = 0
-
-        # Find top appliance
-        top_appliance = max(appliance_data.items(), key=lambda x: x[1])[0] if appliance_data else None
-        top_appliance_cost = appliance_cost.get(top_appliance, 0) if top_appliance else 0
-
-        # Prepare data for AI analysis
-        data = {
-            "total_units": round(total_units, 2),
-            "estimated_bill": round(total_cost, 2),
-            "top_appliance": top_appliance,
-            "appliances": appliance_data
+        # 2. Generate Real Data-Driven Insights
+        raw_insights = generate_insights(analysis)
+        
+        # Add metadata for UI (icons and types are needed by frontend)
+        type_meta = {
+            "spike": {"icon": "🔴", "type": "alert"},
+            "optimization": {"icon": "💡", "type": "tip"},
+            "anomaly": {"icon": "⚠️", "type": "warning"}
         }
+        
+        for ins in raw_insights:
+            meta = type_meta.get(ins['type'], {"icon": "✨", "type": "tip"})
+            ins.update(meta)
 
-        # Get AI insights
-        ai_response = generate_ai_insights(data)
-        
-        # Parse AI response into structured insights
-        insights = self._parse_ai_insights(ai_response, appliance_data, appliance_cost, total_cost)
-
-        return Response({
-            "total_units": round(total_units, 2),
-            "estimated_bill": round(total_cost, 2),
-            "top_appliance": top_appliance,
-            "top_appliance_cost": round(top_appliance_cost, 2),
-            "appliances": appliance_data,
-            "appliance_costs": appliance_cost,
-            "insights": insights
-        })
-
-    def _parse_ai_insights(self, ai_response, appliance_data, appliance_cost, total_cost):
-        """Parse AI response and structure insights with metadata"""
-        insights = []
-        
-        # Split AI response into lines/points
-        lines = [line.strip() for line in ai_response.split('\n') if line.strip()]
-        
-        # Default insight types and icons mapping
-        insight_types = [
-            {'type': 'warning', 'icon': '⚠️'},
-            {'type': 'tip', 'icon': '💡'},
-            {'type': 'alert', 'icon': '🔴'},
-        ]
-        
-        for idx, line in enumerate(lines[:3]):  # Take first 3 insights
-            # Remove numbering (1., 2., 3., etc.)
-            clean_text = re.sub(r'^\d+\.\s*', '', line)
-            
-            # Determine type and icon
-            type_config = insight_types[idx % len(insight_types)]
-            
-            # Estimate potential saving (5-15% of total cost)
-            potential_saving = round((total_cost * (0.05 + idx * 0.05)), 2)
-            
-            # Split title and description
-            parts = clean_text.split(':', 1)
-            title = parts[0].strip()[:50]
-            description = parts[1].strip() if len(parts) > 1 else clean_text
-            
-            insight = {
-                "id": f"insight_{idx}",
-                "title": title,
-                "description": description,
-                "type": type_config['type'],
-                "icon": type_config['icon'],
-                "potentialSaving": potential_saving
-            }
-            insights.append(insight)
-        
-        # If no insights from AI, create default ones
+        # 3. AI NLP Improvement (Real Dynamic AI Recommendations)
+        insights = generate_ai_insights(analysis)
         if not insights:
-            insights = [
-                {
-                    "id": "insight_0",
-                    "title": "Reduce Peak Usage",
-                    "description": "Your peak usage hours have the highest electricity cost. Try shifting non-essential tasks to off-peak hours.",
-                    "type": "tip",
-                    "icon": "💡",
-                    "potentialSaving": round(total_cost * 0.10, 2)
-                },
-                {
-                    "id": "insight_1", 
-                    "title": "Monitor Top Appliance",
-                    "description": f"Your {list(appliance_data.keys())[0]} consumes the most energy. Consider upgrading to an energy-efficient model.",
-                    "type": "warning",
-                    "icon": "⚠️",
-                    "potentialSaving": round(total_cost * 0.15, 2)
-                }
-            ]
+            print("Failed to get dynamic AI insights, using fallback")
+            for idx, ins in enumerate(raw_insights):
+                ins['id'] = f"insight_{idx}"
+            insights = raw_insights
+
+        # 4. Calculate Real Efficiency Score
+        efficiency = calculate_score(analysis)
+
+        # 5. Get automated appliances feedback
+        automated_rules = AutomationRule.objects(user=request.user)
+        automated_data = []
+        for rule in automated_rules:
+            if rule.appliance:
+                units = analysis['appliance_data'].get(rule.appliance.name, 0)
+                reduction = rule.reduction_percent / 100
+                orig_units = units / (1 - reduction) if reduction < 1 else units
+                saved_cost = calculate_bill(orig_units - units)
+                
+                automated_data.append({
+                    "id": str(rule.appliance.id),
+                    "name": rule.appliance.name,
+                    "reduction": rule.reduction_percent,
+                    "savings": round(saved_cost, 2)
+                })
+
+        response_data = {
+            "total_units": round(analysis['monthly_units'], 2),
+            "estimated_bill": round(analysis['total_cost'], 2),
+            "top_appliance": analysis['top_appliance'],
+            "top_appliance_cost": round(calculate_bill(analysis['top_units']), 2),
+            "appliances": analysis['appliance_data'],
+            "appliance_costs": {name: round(calculate_bill(u), 2) for name, u in analysis['appliance_data'].items()},
+            "insights": insights,
+            "efficiency_score": efficiency['score'],
+            "efficiency_label": efficiency['label'],
+            "automated_appliances": automated_data
+        }
         
-        return insights
+        cache.set(cache_key, response_data, timeout=60*60*24) # Cache for 24 hours
+        return Response(response_data)
+
+class ApplyAutomationView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        try:
+            appliance_id = request.data.get("appliance_id")
+            if not appliance_id:
+                usages = Usage.objects(user=request.user).order_by('-units_consumed').first()
+                if usages and usages.appliance:
+                    appliance_id = str(usages.appliance.id)
+                else:
+                    return Response({"error": "No appliance found"}, status=400)
+
+            appliance = Appliance.objects(id=ObjectId(appliance_id), user=request.user).first()
+            if not appliance:
+                return Response({"error": "Appliance not found"}, status=404)
+
+            rule = AutomationRule.objects(user=request.user, appliance=appliance).first()
+            if not rule:
+                rule = AutomationRule(user=request.user, appliance=appliance, rule_type="reduce_usage")
+            
+            rule.reduction_percent = 30
+            rule.save()
+
+            cache.delete(f"insights_response_{request.user.id}")
+
+            return Response({
+                "message": f"Automation applied: {appliance.name} will now consume 30% less energy.",
+                "rule": {
+                    "appliance": appliance.name,
+                    "reduction": "30%",
+                    "type": "Energy Optimization"
+                }
+            })
+        except Exception as e:
+            return Response({"error": str(e)}, status=500)
+
+class RemoveAutomationView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        try:
+            appliance_id = request.data.get("appliance_id")
+            if not appliance_id:
+                usages = Usage.objects(user=request.user).order_by('-units_consumed').first()
+                if usages and usages.appliance:
+                    appliance_id = str(usages.appliance.id)
+                else:
+                    return Response({"error": "No appliance found"}, status=400)
+            
+            appliance = Appliance.objects(id=ObjectId(appliance_id), user=request.user).first()
+            if not appliance:
+                return Response({"error": "Appliance not found"}, status=404)
+            
+            AutomationRule.objects(user=request.user, appliance=appliance).delete()
+            
+            cache.delete(f"insights_response_{request.user.id}")
+            
+            return Response({"message": f"Automation deactivated for {appliance.name}"})
+        except Exception as e:
+            return Response({"error": str(e)}, status=500)
+
+class ChatView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        try:
+            message = request.data.get("message", "")
+            
+            # 1. Fetch real-time analysis
+            analysis = analyze_usage(request.user)
+            
+            # 2. Build rich context for Gemini
+            context = f"""
+            You are assisting a user with their electricity consumption.
+            CURRENT MONTH STATUS:
+            - Monthly Usage: {round(analysis['monthly_units'], 2)} kWh
+            - Estimated Bill: ₹{round(analysis['total_cost'], 2)}
+            - Top Appliance: {analysis['top_appliance']} (consuming {round(analysis['top_units'], 2)} kWh)
+            - Total Savings this month: ₹{round(calculate_bill(analysis['savings_monthly']), 2)}
+            
+            TODAY'S ACTIVITY:
+            - Today's Usage: {round(analysis['today_units'], 2)} kWh
+            - 7-Day Average: {round(analysis['daily_avg'], 2)} kWh
+            - Difference: {round((analysis['today_units'] - analysis['daily_avg']), 2)} kWh
+            
+            ADVICE GUIDELINES:
+            - Mention specific numbers from above.
+            - If today's usage is > average, suggest why and how to reduce it.
+            - If savings are low, suggest enabling automation rules.
+            """
+            
+            reply = get_chat_response(message, context)
+            return Response({"reply": reply})
+        except Exception as e:
+            return Response({"reply": "I'm having trouble analyzing your energy data right now. Could you please try again?"}, status=200)

@@ -42,22 +42,32 @@ const PieCenterLabel = ({ viewBox, totalUsage }) => {
 export default function Dashboard() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [loadingInsights, setLoadingInsights] = useState(true);
   const [insights, setInsights] = useState([]);
   const [prediction, setPrediction] = useState(null);
 
   useEffect(() => {
     async function load() {
       try {
-        const [dash, ai, pred] = await Promise.all([
-          getDashboard(),
-          getAIInsights().catch(() => ({ insights: [] })),
-          getPrediction().catch(() => ({ predicted_bill: 0 })),
-        ]);
+        // Fetch fast dashboard data first
+        const dash = await getDashboard();
         setData(dash);
-        setInsights(Array.isArray(ai.insights) ? ai.insights : []);
-        setPrediction(pred);
+      } catch (error) {
+        console.error("Dashboard load error", error);
       } finally {
+        // Turn off main loading screen instantly once dashboard is ready
         setLoading(false);
+      }
+
+      // Fetch slow AI insights in the background without blocking the UI
+      try {
+        setLoadingInsights(true);
+        const ai = await getAIInsights();
+        setInsights(Array.isArray(ai.insights) ? ai.insights : []);
+      } catch (error) {
+        setInsights([]);
+      } finally {
+        setLoadingInsights(false);
       }
     }
     load();
@@ -67,8 +77,12 @@ export default function Dashboard() {
 
   /* ── Data transforms ─────────────────────────────────────────────── */
   const dailyUnits = data?.daily_units ?? 0;
+  const originalDailyUnits = data?.original_daily_units ?? dailyUnits;
   const estimatedBill = data?.estimated_bill ?? 0;
-  const predictedBill = prediction?.predicted_bill ?? data?.predicted_bill ?? 0;
+  const originalEstimatedBill = data?.original_estimated_bill ?? estimatedBill;
+  const predictedBill = data?.predicted_bill ?? 0;
+  const originalPredictedBill = data?.original_predicted_bill ?? predictedBill;
+  const savingsToday = data?.savings_today ?? 0;
   const monthlyChange = data?.monthly_change ?? 0;
   const topConsumer = data?.top_consumer || null;
 
@@ -102,29 +116,52 @@ export default function Dashboard() {
       {/* ── Top Stat Cards ──────────────────────────────────────────── */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
 
-        {/* Total Units */}
         <div className="bg-[var(--card)] border border-[var(--border)] rounded-2xl p-5 flex flex-col justify-between">
-          <div className="flex items-center gap-2 mb-3">
-            <span className="w-7 h-7 rounded-lg bg-[var(--accent)]/15 flex items-center justify-center text-sm">⚡</span>
-            <span className="text-[10px] font-mono text-[var(--text3)] uppercase tracking-widest">Today's Units</span>
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <span className="w-7 h-7 rounded-lg bg-[var(--accent)]/15 flex items-center justify-center text-sm">⚡</span>
+              <span className="text-[10px] font-mono text-[var(--text3)] uppercase tracking-widest">Daily Units</span>
+            </div>
+            {savingsToday > 0 && <Badge variant="green">-{(originalDailyUnits - dailyUnits).toFixed(2)} kWh Saved</Badge>}
           </div>
-          <p className="text-3xl font-bold font-mono text-[var(--text)] leading-none">
-            {dailyUnits.toLocaleString('en-IN')} <span className="text-base font-normal text-[var(--text3)]">kWh</span>
-          </p>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <p className="text-[10px] text-[var(--text3)] mb-1 uppercase">Optimized</p>
+              <p className="text-2xl font-bold font-mono text-[var(--accent)] leading-none">
+                {dailyUnits.toFixed(1)} <span className="text-xs font-normal">kWh</span>
+              </p>
+            </div>
+            <div className="border-l border-[var(--border)] pl-4 opacity-60">
+              <p className="text-[10px] text-[var(--text3)] mb-1 uppercase">Original</p>
+              <p className="text-2xl font-bold font-mono text-[var(--text3)] leading-none">
+                {originalDailyUnits.toFixed(1)} <span className="text-xs font-normal">kWh</span>
+              </p>
+            </div>
+          </div>
         </div>
 
-        {/* Predicted Bill */}
         <div className="bg-[var(--card)] border border-[var(--border)] rounded-2xl p-5 flex flex-col justify-between">
-          <div className="flex items-center gap-2 mb-3">
-            <span className="w-7 h-7 rounded-lg bg-[var(--accent3)]/15 flex items-center justify-center text-sm">💰</span>
-            <span className="text-[10px] font-mono text-[var(--text3)] uppercase tracking-widest">Predicted Bill</span>
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <span className="w-7 h-7 rounded-lg bg-[var(--accent3)]/15 flex items-center justify-center text-sm">💰</span>
+              <span className="text-[10px] font-mono text-[var(--text3)] uppercase tracking-widest">Predicted Bill</span>
+            </div>
           </div>
-          <div>
-            <p className="text-3xl font-bold font-mono text-[var(--text)] leading-none">
-              {formatCurrency(predictedBill)}
-            </p>
-            <p className="text-[10px] text-[var(--text3)] mt-1.5 font-mono">Today's Est: {formatCurrency(estimatedBill)}</p>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <p className="text-[10px] text-[var(--text3)] mb-1 uppercase">With Opt</p>
+              <p className="text-2xl font-bold font-mono text-[var(--accent3)] leading-none">
+                {formatCurrency(predictedBill)}
+              </p>
+            </div>
+            <div className="border-l border-[var(--border)] pl-4 opacity-60">
+              <p className="text-[10px] text-[var(--text3)] mb-1 uppercase">Without Opt</p>
+              <p className="text-2xl font-bold font-mono text-[var(--text3)] leading-none">
+                {formatCurrency(originalPredictedBill)}
+              </p>
+            </div>
           </div>
+          <p className="text-[10px] text-[var(--text3)] mt-3 font-mono">Today's Est: {formatCurrency(estimatedBill)} (Saved {formatCurrency(savingsToday)})</p>
         </div>
 
         {/* Monthly Change */}
@@ -138,11 +175,14 @@ export default function Dashboard() {
             <span className="text-[10px] font-mono text-[var(--text3)] uppercase tracking-widest">Monthly Change</span>
           </div>
           <p className={`text-3xl font-bold font-mono leading-none ${
+            monthlyChange === null ? 'text-[var(--text3)]' :
             changeIsPositive ? 'text-red-400' : 'text-green-400'
           }`}>
-            {changeIsPositive ? '+' : ''}{monthlyChange.toFixed(1)}%
+            {monthlyChange === null ? 'No Data' : `${changeIsPositive ? '+' : ''}${monthlyChange.toFixed(1)}%`}
           </p>
-          <p className="text-[10px] text-[var(--text3)] mt-1.5 font-mono">Compared to last month</p>
+          <p className="text-[10px] text-[var(--text3)] mt-1.5 font-mono">
+            {monthlyChange === null ? 'Insufficient historical data' : 'Compared to last month'}
+          </p>
         </div>
       </div>
 
@@ -197,7 +237,12 @@ export default function Dashboard() {
               <h3 className="text-sm font-semibold text-[var(--text)]">Smart Insights</h3>
             </div>
 
-            {insights.length > 0 ? (
+            {loadingInsights ? (
+              <div className="flex flex-col items-center justify-center py-6 text-center">
+                <div className="w-5 h-5 border-2 border-[var(--accent)] border-t-transparent rounded-full animate-spin mb-3"></div>
+                <p className="text-xs font-mono text-[var(--text3)] animate-pulse">Generating AI Insights...</p>
+              </div>
+            ) : insights.length > 0 ? (
               <div className="space-y-3">
                 {insights.map((insight) => (
                   <div key={insight.id} className="flex items-start gap-2.5">

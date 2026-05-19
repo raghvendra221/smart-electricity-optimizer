@@ -162,3 +162,24 @@ export async function getPrediction() {
 export async function getAIInsights() {
   return request('/insight/ai-insights/');
 }
+
+export async function applyAutomation(applianceId = null) {
+  return request('/automation/apply/', {
+    method: 'POST',
+    body: JSON.stringify({ appliance_id: applianceId })
+  });
+}
+
+export async function removeAutomation(applianceId = null) {
+  return request('/automation/remove/', {
+    method: 'POST',
+    body: JSON.stringify({ appliance_id: applianceId })
+  });
+}
+
+export async function sendChatMessage(message) {
+  return request('/chat/', {
+    method: 'POST',
+    body: JSON.stringify({ message }),
+  });
+}
