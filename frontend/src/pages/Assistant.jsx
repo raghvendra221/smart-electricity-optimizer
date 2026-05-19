@@ -2,7 +2,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { sendChatMessage } from '../services/api.js';
 import { useToast } from '../context/ToastContext.jsx';
-import ReactMarkdown from 'react-markdown';
 
 export default function Assistant() {
   const [chatMessages, setChatMessages] = useState([
@@ -59,18 +58,12 @@ export default function Assistant() {
         <div className="flex-1 p-6 overflow-y-auto space-y-6 bg-[var(--bg)] scroll-smooth">
           {chatMessages.map((m, i) => (
             <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-              <div className={`max-w-[85%] md:max-w-[70%] p-4 rounded-2xl text-sm leading-relaxed ${
+              <div className={`max-w-[85%] md:max-w-[70%] p-4 rounded-2xl text-sm leading-relaxed whitespace-pre-line ${
                 m.role === 'user' 
                   ? 'bg-[var(--accent)] text-white rounded-tr-none shadow-md shadow-[var(--accent)]/10' 
                   : 'bg-[var(--card)] border border-[var(--border)] text-[var(--text)] rounded-tl-none shadow-sm'
               }`}>
-                {m.role === 'user' ? (
-                  m.content
-                ) : (
-                  <ReactMarkdown className="prose prose-sm dark:prose-invert max-w-none">
-                    {m.content}
-                  </ReactMarkdown>
-                )}
+                {m.content}
               </div>
             </div>
           ))}
