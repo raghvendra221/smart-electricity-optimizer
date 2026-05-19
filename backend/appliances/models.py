@@ -11,5 +11,8 @@ class Appliance(Document):
 
     meta = {
         'collection': 'appliances',
-        'strict': False
+        'strict': False,
+        'indexes': [
+            'user'
+        ]
     }

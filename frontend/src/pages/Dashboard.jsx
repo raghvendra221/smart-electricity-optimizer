@@ -48,21 +48,22 @@ export default function Dashboard() {
 
   useEffect(() => {
     async function load() {
+      // Trigger both requests concurrently to optimize load performance
+      const dashboardPromise = getDashboard();
+      const insightsPromise = getAIInsights().catch(err => ({ insights: [] }));
+
       try {
-        // Fetch fast dashboard data first
-        const dash = await getDashboard();
+        const dash = await dashboardPromise;
         setData(dash);
       } catch (error) {
         console.error("Dashboard load error", error);
       } finally {
-        // Turn off main loading screen instantly once dashboard is ready
         setLoading(false);
       }
 
-      // Fetch slow AI insights in the background without blocking the UI
       try {
         setLoadingInsights(true);
-        const ai = await getAIInsights();
+        const ai = await insightsPromise;
         setInsights(Array.isArray(ai.insights) ? ai.insights : []);
       } catch (error) {
         setInsights([]);

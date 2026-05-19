@@ -81,8 +81,10 @@ class AddUsageView(APIView):
                 )
             usage.save()
 
-            from django.core.cache import cache
-            cache.delete(f"insights_response_{request.user.id}")
+            user = request.user
+            user.cached_insights = {}
+            user.insights_updated_at = None
+            user.save()
 
             return Response({
                 "message": "Usage updated",

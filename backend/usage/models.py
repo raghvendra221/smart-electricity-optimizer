@@ -15,5 +15,11 @@ class Usage(Document):
 
     meta = {
         'collection': 'usage',
-        'strict': False
+        'strict': False,
+        'indexes': [
+            'user',
+            'date',
+            ('user', 'date'),
+            ('user', '-date')
+        ]
     }

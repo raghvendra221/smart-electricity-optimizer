@@ -51,17 +51,8 @@ def generate_ai_insights(analysis):
         ]
         """
 
-        # Dynamically fetch available models
-        try:
-            available_models = [m.name.replace("models/", "") for m in client.models.list()]
-            
-            # Prioritize flash or pro models if available
-            preferred = ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash", "gemini-flash-latest"]
-            models_to_try = [m for m in preferred if m in available_models] + available_models
-            if not models_to_try:
-                models_to_try = ["gemini-2.5-flash", "gemini-2.0-flash"]
-        except Exception:
-            models_to_try = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-flash-latest"]
+        # Use hardcoded list of preferred models to avoid slow client.models.list() call
+        models_to_try = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]
             
         response = None
         last_error = None
@@ -125,15 +116,8 @@ def get_chat_response(message, context=None):
         
         User: {message}
         Personal Energy Analyst:"""
-        # Try multiple models to avoid rate limiting on free tier
-        try:
-            available_models = [m.name.replace("models/", "") for m in client.models.list()]
-            preferred = ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash", "gemini-1.5-flash", "gemini-flash-latest"]
-            models_to_try = [m for m in preferred if m in available_models] + available_models
-            if not models_to_try:
-                models_to_try = ["gemini-2.0-flash", "gemini-1.5-flash"]
-        except Exception:
-            models_to_try = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-flash-latest"]
+        # Use hardcoded list of preferred models to avoid slow client.models.list() call
+        models_to_try = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]
             
         last_error = None
         for model in models_to_try:

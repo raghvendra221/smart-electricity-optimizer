@@ -1,4 +1,4 @@
-from mongoengine import Document, StringField, EmailField, DateTimeField
+from mongoengine import Document, StringField, EmailField, DateTimeField, DictField
 from django.utils import timezone
 import bcrypt
 
@@ -8,6 +8,8 @@ class User(Document):
     email = EmailField(required=True, unique=True)
     password = StringField(required=True)
     created_at = DateTimeField(default=timezone.now)
+    cached_insights = DictField()
+    insights_updated_at = DateTimeField()
 
     meta = {'collection': 'users'}
 

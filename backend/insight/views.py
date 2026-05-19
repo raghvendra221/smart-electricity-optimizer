@@ -19,10 +19,20 @@ class GeminiInsightsView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        cache_key = f"insights_response_{request.user.id}"
-        cached_data = cache.get(cache_key)
-        if cached_data:
-            return Response(cached_data)
+        user = request.user
+        now = timezone.now()
+        
+        # Check if we have fresh cached insights (e.g. less than 1 hour old)
+        if getattr(user, 'insights_updated_at', None) and getattr(user, 'cached_insights', None):
+            # Convert naive/aware datetimes if needed
+            from django.utils.timezone import is_naive, make_aware
+            import datetime
+            dt = user.insights_updated_at
+            if is_naive(dt):
+                dt = make_aware(dt, timezone=datetime.timezone.utc)
+            if now - dt < timedelta(hours=1):
+                print("[DEBUG] Returning persistent cached insights from MongoDB")
+                return Response(user.cached_insights)
             
         # 1. Analyze Usage
         analysis = analyze_usage(request.user)
@@ -92,7 +102,9 @@ class GeminiInsightsView(APIView):
             "automated_appliances": automated_data
         }
         
-        cache.set(cache_key, response_data, timeout=60*60*24) # Cache for 24 hours
+        user.cached_insights = response_data
+        user.insights_updated_at = now
+        user.save()
         return Response(response_data)
 
 class ApplyAutomationView(APIView):
@@ -119,7 +131,10 @@ class ApplyAutomationView(APIView):
             rule.reduction_percent = 30
             rule.save()
 
-            cache.delete(f"insights_response_{request.user.id}")
+            user = request.user
+            user.cached_insights = {}
+            user.insights_updated_at = None
+            user.save()
 
             return Response({
                 "message": f"Automation applied: {appliance.name} will now consume 30% less energy.",
@@ -151,7 +166,10 @@ class RemoveAutomationView(APIView):
             
             AutomationRule.objects(user=request.user, appliance=appliance).delete()
             
-            cache.delete(f"insights_response_{request.user.id}")
+            user = request.user
+            user.cached_insights = {}
+            user.insights_updated_at = None
+            user.save()
             
             return Response({"message": f"Automation deactivated for {appliance.name}"})
         except Exception as e:

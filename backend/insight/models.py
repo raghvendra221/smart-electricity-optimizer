@@ -12,5 +12,8 @@ class AutomationRule(Document):
 
     meta = {
         'collection': 'automation_rules',
-        'strict': False
+        'strict': False,
+        'indexes': [
+            'user'
+        ]
     }
