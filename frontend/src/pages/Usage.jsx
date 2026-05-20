@@ -5,7 +5,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
 } from 'recharts';
 import {
-  getAppliances, logUsage, getUsageSummary, getUsageHistory, getUsageLogs,
+  getAppliances, logUsage, getUsageSummary, getUsageHistory, getUsageLogs, getCachedData
 } from '../services/api.js';
 import {
   Card, LoadingScreen, EmptyState, Button, Badge,
@@ -37,11 +37,11 @@ const RANGES = [
 
 /* ── Main Component ─────────────────────────────────────────────── */
 export default function Usage() {
-  const [summary, setSummary] = useState({ total_units: 0, estimated_bill: 0 });
-  const [history, setHistory] = useState({ labels: [], values: [] });
-  const [logs, setLogs] = useState([]);
-  const [appliances, setAppliances] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [summary, setSummary] = useState(() => getCachedData('usageSummary') || { total_units: 0, estimated_bill: 0 });
+  const [history, setHistory] = useState(() => getCachedData('usageHistory_7d') || { labels: [], values: [] });
+  const [logs, setLogs] = useState(() => getCachedData('usageLogs')?.logs || []);
+  const [appliances, setAppliances] = useState(() => getCachedData('appliances')?.appliances || []);
+  const [loading, setLoading] = useState(() => !getCachedData('usageSummary') || !getCachedData('usageHistory_7d'));
   const [range, setRange] = useState('7d');
 
   // Log form state

@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import { MdAdd, MdEdit, MdDelete, MdSearch, MdOpenInNew } from 'react-icons/md';
 import {
-  getAppliances, addAppliance, updateAppliance, deleteAppliance, getApplianceStats,
+  getAppliances, addAppliance, updateAppliance, deleteAppliance, getApplianceStats, getCachedData
 } from '../services/api.js';
 import {
   Card, Button, Input, Modal, Badge, LoadingScreen, EmptyState,
@@ -34,9 +34,9 @@ const BLANK = { name: '', wattage: '' };
 
 /* ── Main Component ─────────────────────────────────────────────── */
 export default function Appliances() {
-  const [appliances, setAppliances] = useState([]);
-  const [stats, setStats] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [appliances, setAppliances] = useState(() => getCachedData('appliances')?.appliances || []);
+  const [stats, setStats] = useState(() => getCachedData('applianceStats')?.appliances || []);
+  const [loading, setLoading] = useState(() => !getCachedData('appliances') || !getCachedData('applianceStats'));
   const [form, setForm] = useState(BLANK);
   const [formErrors, setFormErrors] = useState({});
   const [adding, setAdding] = useState(false);
@@ -52,7 +52,9 @@ export default function Appliances() {
   useEffect(() => { load(); }, []);
 
   async function load() {
-    setLoading(true);
+    if (!getCachedData('appliances') || !getCachedData('applianceStats')) {
+      setLoading(true);
+    }
     try {
       const [listRes, statsRes] = await Promise.all([
         getAppliances(),
@@ -190,11 +192,10 @@ export default function Appliances() {
             <button
               key={f}
               onClick={() => setFilter(f)}
-              className={`px-4 py-1.5 rounded-md text-xs font-medium transition-all duration-200 ${
-                filter === f
+              className={`px-4 py-1.5 rounded-md text-xs font-medium transition-all duration-200 ${filter === f
                   ? 'bg-[var(--accent)] text-gray-900 shadow-sm'
                   : 'text-[var(--text3)] hover:text-[var(--text2)]'
-              }`}
+                }`}
             >
               {f}
             </button>

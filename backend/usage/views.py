@@ -82,8 +82,8 @@ class AddUsageView(APIView):
             usage.save()
 
             user = request.user
-            user.cached_insights = {}
-            user.insights_updated_at = None
+            # Mark cache as stale but do not delete, so subsequent requests remain fast
+            user.insights_updated_at = timezone.now() - timedelta(hours=2)
             user.save()
 
             return Response({

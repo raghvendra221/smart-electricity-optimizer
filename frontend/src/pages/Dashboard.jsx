@@ -4,7 +4,7 @@ import {
   PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
   AreaChart, Area, XAxis, YAxis, CartesianGrid,
 } from 'recharts';
-import { getDashboard, getAIInsights, getPrediction } from '../services/api.js';
+import { getDashboard, getAIInsights, getPrediction, getCachedData } from '../services/api.js';
 import { Card, LoadingScreen, Badge } from '../components/ui/index.jsx';
 import { formatCurrency, CHART_COLORS } from '../utils/electricity.js';
 
@@ -40,10 +40,13 @@ const PieCenterLabel = ({ viewBox, totalUsage }) => {
 
 /* ── Main Dashboard ────────────────────────────────────────────────── */
 export default function Dashboard() {
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [loadingInsights, setLoadingInsights] = useState(true);
-  const [insights, setInsights] = useState([]);
+  const [data, setData] = useState(() => getCachedData('dashboard'));
+  const [loading, setLoading] = useState(() => !getCachedData('dashboard'));
+  const [loadingInsights, setLoadingInsights] = useState(() => !getCachedData('insights'));
+  const [insights, setInsights] = useState(() => {
+    const cached = getCachedData('insights');
+    return Array.isArray(cached?.insights) ? cached.insights : [];
+  });
   const [prediction, setPrediction] = useState(null);
 
   useEffect(() => {
@@ -62,7 +65,6 @@ export default function Dashboard() {
       }
 
       try {
-        setLoadingInsights(true);
         const ai = await insightsPromise;
         setInsights(Array.isArray(ai.insights) ? ai.insights : []);
       } catch (error) {

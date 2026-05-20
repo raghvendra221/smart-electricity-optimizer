@@ -5,7 +5,7 @@ import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid 
 } from 'recharts';
 import { 
-  getInsights, getUsageHistory, applyAutomation, removeAutomation
+  getInsights, getUsageHistory, applyAutomation, removeAutomation, getCachedData
 } from '../services/api.js';
 import { StatCard, LoadingScreen, EmptyState, Badge } from '../components/ui/index.jsx';
 import { formatCurrency } from '../utils/electricity.js';
@@ -20,22 +20,34 @@ const TYPE_STYLES = {
 };
 
 export default function Insights() {
-  const [data, setData] = useState({
-    insights: [],
-    total_units: 0,
-    estimated_bill: 0,
-    top_appliance: null,
-    appliances: {},
-    appliance_costs: {},
-    automated_appliances: []
+  const [data, setData] = useState(() => {
+    const cached = getCachedData('insights');
+    return {
+      insights: cached?.insights || [],
+      total_units: cached?.total_units || 0,
+      estimated_bill: cached?.estimated_bill || 0,
+      top_appliance: cached?.top_appliance || null,
+      appliances: cached?.appliances || {},
+      appliance_costs: cached?.appliance_costs || {},
+      automated_appliances: cached?.automated_appliances || []
+    };
   });
-  const [historyData, setHistoryData] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [historyData, setHistoryData] = useState(() => {
+    const cached = getCachedData('usageHistory_30d');
+    if (cached?.labels && cached?.values) {
+      return cached.labels.map((label, idx) => ({
+        date: label,
+        units: cached.values[idx]
+      }));
+    }
+    return [];
+  });
+  const [loading, setLoading] = useState(() => !getCachedData('insights'));
   const [isApplying, setIsApplying] = useState(false);
   const { addToast } = useToast();
 
   const loadData = async (showLoading = true) => {
-    if (showLoading) setLoading(true);
+    if (showLoading && !getCachedData('insights')) setLoading(true);
     try {
       const [insightsRes, historyRes] = await Promise.all([
         getInsights(),

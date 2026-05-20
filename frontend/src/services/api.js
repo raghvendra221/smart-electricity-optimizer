@@ -7,6 +7,35 @@ const getToken = () => localStorage.getItem('seuo_token');
 
 let refreshPromise = null;
 
+// ── In-Memory API Cache ──────────────────────────────────────────────────────
+const memoryCache = new Map();
+
+export function getCachedData(key) {
+  const cached = memoryCache.get(key);
+  if (!cached) return null;
+  // Cache expires after 5 minutes
+  if (Date.now() - cached.timestamp > 5 * 60 * 1000) {
+    memoryCache.delete(key);
+    return null;
+  }
+  return cached.data;
+}
+
+export function setCachedData(key, data) {
+  memoryCache.set(key, {
+    data,
+    timestamp: Date.now()
+  });
+}
+
+export function clearCache(keys = []) {
+  if (keys.length === 0) {
+    memoryCache.clear();
+  } else {
+    keys.forEach(k => memoryCache.delete(k));
+  }
+}
+
 async function request(path, options = {}) {
   const token = getToken();
   const headers = {
@@ -71,6 +100,7 @@ async function request(path, options = {}) {
 // ── Auth ─────────────────────────────────────────────────────────────────────
 
 export async function loginUser(email, password) {
+  clearCache(); // clear any previous cache on login
   return request('/auth/login/', {
     method: 'POST',
     body: JSON.stringify({ email, password }),
@@ -78,6 +108,7 @@ export async function loginUser(email, password) {
 }
 
 export async function registerUser(name, email, password) {
+  clearCache(); // clear any previous cache on register
   return request('/auth/register/', {
     method: 'POST',
     body: JSON.stringify({ name, email, password }),
@@ -87,94 +118,135 @@ export async function registerUser(name, email, password) {
 // ── Dashboard ─────────────────────────────────────────────────────────────────
 
 export async function getDashboard() {
-  return request('/dashboard/dashboard/');
+  const data = await request('/dashboard/dashboard/');
+  setCachedData('dashboard', data);
+  return data;
 }
 
 
 // ── Appliances ─────────────────────────────────────────────
 
 export async function getAppliances() {
-  return request('/appliances/'); // ✅ slash
+  const data = await request('/appliances/');
+  setCachedData('appliances', data);
+  return data;
 }
 
 export async function addAppliance(data) {
-  return request('/appliances/add/', { // ✅ correct endpoint
+  const res = await request('/appliances/add/', {
     method: 'POST',
     body: JSON.stringify(data),
   });
+  clearCache(['appliances', 'applianceStats', 'dashboard', 'insights']);
+  return res;
 }
 
 export async function updateAppliance(id, data) {
-  return request(`/appliances/${id}/`, { // ✅ slash
+  const res = await request(`/appliances/${id}/`, {
     method: 'PUT',
     body: JSON.stringify(data),
   });
+  clearCache(['appliances', 'applianceStats', 'dashboard', 'insights']);
+  return res;
 }
 
 export async function deleteAppliance(id) {
-  return request(`/appliances/${id}/delete/`, { // ✅ correct endpoint
+  const res = await request(`/appliances/${id}/delete/`, {
     method: 'DELETE',
   });
+  clearCache(['appliances', 'applianceStats', 'dashboard', 'insights']);
+  return res;
 }
 
 export async function getApplianceStats() {
-  return request('/appliances/stats/');
+  const data = await request('/appliances/stats/');
+  setCachedData('applianceStats', data);
+  return data;
 }
 
 // ── Usage ─────────────────────────────────────────────────────────────────────
 
 export async function getUsageSummary() {
-  return request('/usage/summary/');
+  const data = await request('/usage/summary/');
+  setCachedData('usageSummary', data);
+  return data;
 }
 
 export async function getApplianceUsage() {
-  return request('/usage/appliance/');
+  const data = await request('/usage/appliance/');
+  setCachedData('applianceUsage', data);
+  return data;
 }
 
 export async function logUsage({ applianceId, hours }) {
-  return request('/usage/add/', {
+  const res = await request('/usage/add/', {
     method: 'POST',
     body: JSON.stringify({
       appliance_id: applianceId,
       hours_used: hours
     }),
   });
+  clearCache([
+    'usageSummary',
+    'usageLogs',
+    'usageHistory_7d',
+    'usageHistory_30d',
+    'usageHistory_365d',
+    'applianceStats',
+    'dashboard',
+    'insights'
+  ]);
+  return res;
 }
 
 export async function getUsageHistory(range = '7d') {
-  return request(`/usage/history/?range=${range}`);
+  const data = await request(`/usage/history/?range=${range}`);
+  setCachedData(`usageHistory_${range}`, data);
+  return data;
 }
 
 export async function getUsageLogs() {
-  return request('/usage/logs/');
+  const data = await request('/usage/logs/');
+  setCachedData('usageLogs', data);
+  return data;
 }
 
 // ── Insights ──────────────────────────────────────────────────────────────────
 
 export async function getInsights() {
-  return request('/insight/ai-insights/');
+  const data = await request('/insight/ai-insights/');
+  setCachedData('insights', data);
+  return data;
 }
 
 export async function getPrediction() {
-  return request('/usage/predict/');
+  const data = await request('/usage/predict/');
+  setCachedData('prediction', data);
+  return data;
 }
 
 export async function getAIInsights() {
-  return request('/insight/ai-insights/');
+  const data = await request('/insight/ai-insights/');
+  setCachedData('insights', data);
+  return data;
 }
 
 export async function applyAutomation(applianceId = null) {
-  return request('/automation/apply/', {
+  const res = await request('/automation/apply/', {
     method: 'POST',
     body: JSON.stringify({ appliance_id: applianceId })
   });
+  clearCache(['insights', 'dashboard', 'appliances', 'applianceStats']);
+  return res;
 }
 
 export async function removeAutomation(applianceId = null) {
-  return request('/automation/remove/', {
+  const res = await request('/automation/remove/', {
     method: 'POST',
     body: JSON.stringify({ appliance_id: applianceId })
   });
+  clearCache(['insights', 'dashboard', 'appliances', 'applianceStats']);
+  return res;
 }
 
 export async function sendChatMessage(message) {
